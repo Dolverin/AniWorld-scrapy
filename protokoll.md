@@ -632,56 +632,7 @@
   - Protokolldateien auf neue Fehlermeldungen überprüfen
   - Basierend auf den Protokollen weitere Fehlerbehebungsschritte planen
 
-## [2025-03-22 20:07] Behebung des Datenbankproblems bei der Suche
-
-- **Modifizierte Dateien:**
-  - `src/aniworld/search.py` - Korrektur des status-Feldwerts von "Unbekannt" zu "laufend"
-  - `src/aniworld/database/integration.py` - Korrektur des status-Feldwerts in der save_minimal_anime-Methode
-  - `config.ini` - Änderung von autocommit=false zu autocommit=true
-
-- **Problem:**
-  - Die Anwendung stürzte ab, wenn nach "solo" gesucht wurde und beim Versuch, die Ergebnisse in der Datenbank zu speichern
-  - Der Fehler war auf das status-Feld zurückzuführen, das ein ENUM mit den Werten 'laufend', 'abgeschlossen' und 'angekündigt' ist
-  - Wir versuchten "Unbekannt" zu speichern, was zu einem Fehler führte
-
-- **Lösung:**
-  - Änderung aller "Unbekannt"-Werte in den SQL-Befehlen auf "laufend"
-  - Aktivierung von autocommit in der Datenbankkonfiguration
-  - Direktere Fehlerprotokollierung
-
-- **Aktueller Status:**
-  - Manuelle Datenbanktests bestätigen, dass Einträge korrekt gespeichert werden können
-  - Die Anwendung scheint stabiler zu laufen
-  - Solo Leveling wurde erfolgreich manuell in die Datenbank eingefügt
-
-- **Nächste Schritte:**
-  - Test der automatischen Datenbankschreibfunktionen mit verschiedenen Anime-Serien
-  - Weitere Überwachung auf versteckte Fehler
-  - Überprüfung der Staffel- und Episodenspeicherung
-
-## [2025-03-22 20:11] Erfolgreiche Tests der Datenbankfunktionalität über CLI
-
-- **Durchgeführte Tests:**
-  - Manuelle Einfügung eines Testeintrags in die Datenbank über SQL
-  - Erfolgreiche Abfrage der Datenbank mit `--db-list-anime`
-  - Erfolgreiche Anzeige detaillierter Informationen mit `--db-anime-info 11`
-
-- **Erkenntnisse:**
-  - Die grafische Benutzeroberfläche funktioniert nicht auf dem Server wegen fehlendem X-Server
-  - Die Kommandozeileninterface-Funktionen (CLI) für Datenbankoperationen funktionieren einwandfrei
-  - Beide in der Datenbank gespeicherten Anime werden korrekt angezeigt
-
-- **Aktueller Status:**
-  - Die Datenbankanbindung ist vollständig funktionsfähig
-  - CLI-Kommandos können verwendet werden, um Datenbankoperationen durchzuführen
-  - Das ENUM-Problem mit dem status-Feld wurde behoben
-
-- **Nächste Schritte:**
-  - Tests mit dem Parameter `--query` für neue Anime durchführen
-  - Automatisierung für regelmäßige Aktualisierungen der Datenbank implementieren
-  - Entwicklung eines Dashboards zur Überwachung der Anime-Datenbank
-
-## [2024-07-25 21:55] Behebung der TUI-Abstürze und Datenbankprobleme mit Staffeln/Episoden
+## [2025-03-22 20:07] Behebung der TUI-Abstürze und Datenbankprobleme mit Staffeln/Episoden
 
 - **Modifizierte Dateien:**
   - `src/aniworld/search.py` - Korrektur der Datenextraktion und Datenbank-Integration
@@ -714,5 +665,46 @@
   - Überprüfung der Datenqualität in der Datenbank
   - Optimierung der Performance bei großen Datensätzen
   - Mögliche Erweiterung um eine asynchrone Datenbankspeicherung im Hintergrund
+
+## [2024-07-25 22:55] Behebung der Titelextraktion und Staffel/Episoden-Probleme
+
+- **Durchgeführte Analyse:**
+  - Debug-Skript erstellt und ausgeführt, um die HTML-Struktur von Solo Leveling zu analysieren
+  - HTML-Selektoren auf der aktuellen Website getestet und korrekte Selektoren identifiziert
+
+- **Geänderte Dateien:**
+  - `src/aniworld/search.py` - Umfassende Überarbeitung der HTML-Extraktion
+
+- **Identifizierte Probleme:**
+  1. Der verwendete Selektor `h1.seriesCoverMainTitle` existiert nicht auf der aktuellen Website
+  2. Die Staffel- und Episodenextraktion ist unflexibel bei unterschiedlichen HTML-Strukturen
+  3. Fehlende Fallback-Mechanismen wenn die bevorzugten Selektoren fehlschlagen
+
+- **Änderungen:**
+  - **Titelextraktion verbessert:**
+    - Mehrere alternative Selektoren implementiert (`.series-title h1`, `h1`, `title`, `meta[property='og:title']`)
+    - Fallback-Mechanismus zur Extraktion des Titels aus der URL
+    - Detaillierte Fehlerprotokollierung mit HTML-Vorschau bei Fehlern
+
+  - **Staffel- und Episodenextraktion robuster gemacht:**
+    - Mehrere Methoden zur Staffelerkennung implementiert
+    - Verbesserte Extraktion von Episoden mit verschiedenen Selektoren
+    - Automatische Erstellung einer Standardstaffel, wenn keine Staffeln gefunden werden
+    - Extrahierung von Episodennummern aus verschiedenen Quellen (URL, Titel, etc.)
+
+  - **Allgemeine Verbesserungen:**
+    - Detaillierte Logging-Ausgaben für bessere Diagnose
+    - Flexiblere Cover-Bild-Extraktion mit mehreren Selektoren
+    - Validierung und Konvertierung der extrahierten Daten
+
+- **Aktueller Status:**
+  - Die HTML-Extraktion sollte nun mit verschiedenen Websitestrukturen funktionieren
+  - Selektoren sind auf die aktuellste Websiteversion angepasst
+  - Selbst wenn einige Elemente nicht gefunden werden, wird ein minimaler Anime-Eintrag erstellt
+
+- **Nächste Schritte:**
+  - Testen der überarbeiteten Extraktion mit verschiedenen Anime-Serien
+  - Monitoring der Logs, um festzustellen, ob die HTML-Extraktion zuverlässig funktioniert
+  - Verbesserte Datenvalidierung für unvollständige Daten
 
 ## Glossar 
