@@ -22,6 +22,30 @@ from aniworld.common import (
 
 # Datenbankintegration (optional für Systeme ohne Datenbank)
 HAS_DATABASE = False
+
+# Temporärer Test der Datenbankverbindung
+print("=== DATENBANK-TEST ===")
+print(f"HAS_DATABASE vor Import: {HAS_DATABASE}")
+try:
+    from aniworld.database.pipeline import get_pipeline
+    HAS_DATABASE = True
+    print(f"HAS_DATABASE nach Import: {HAS_DATABASE}")
+    pipeline = get_pipeline()
+    print(f"Pipeline erstellt: {pipeline}")
+    if pipeline.db is None:
+        print("FEHLER: Datenbankverbindung konnte nicht hergestellt werden")
+    else:
+        print("ERFOLG: Datenbankverbindung erfolgreich hergestellt")
+        # Teste eine einfache Datenbankoperation
+        try:
+            animes = pipeline.db.find_all_animes()
+            print(f"Anzahl Anime in der Datenbank: {len(animes)}")
+        except Exception as e:
+            print(f"FEHLER bei Datenbankabfrage: {str(e)}")
+except Exception as e:
+    print(f"FEHLER bei Datenbanktest: {str(e)}")
+print("=== ENDE DATENBANK-TEST ===")
+
 try:
     from aniworld.database.pipeline import get_pipeline
     HAS_DATABASE = True
@@ -100,14 +124,17 @@ def save_anime_data_from_html(html_content: str, url: str, slug: str) -> Optiona
         ID des gespeicherten Anime oder None bei Fehler
     """
     if not HAS_DATABASE:
+        print("Datenbank nicht verfügbar - HAS_DATABASE ist False")
         return None
         
     try:
+        print(f"Starte Extraktion und Speicherung für Anime: {slug}")
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Extrahiere Titel
         title_elem = soup.find('h1', class_='series-title')
         title = title_elem.text.strip() if title_elem else slug.replace('-', ' ').title()
+        print(f"Extrahierter Titel: {title}")
         
         # Extrahiere Beschreibung
         description_elem = soup.find('div', class_='series-description')
@@ -184,10 +211,17 @@ def save_anime_data_from_html(html_content: str, url: str, slug: str) -> Optiona
             anime_data['seasons'] = seasons
         
         # Speichere in der Datenbank
+        print("Rufe get_pipeline() auf...")
         pipeline = get_pipeline()
-        return pipeline.process_anime(anime_data)
+        print(f"Pipeline-Objekt: {pipeline}")
+        print("Speichere Anime-Daten in Datenbank...")
+        result = pipeline.process_anime(anime_data)
+        print(f"Ergebnis der Speicherung: {result}")
+        return result
     except Exception as e:
-        logging.error(f"Fehler beim Extrahieren von Anime-Daten: {e}")
+        print(f"KRITISCHER FEHLER bei Anime-Speicherung: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -211,6 +245,11 @@ def search_by_query(query: str) -> str:
             print("No series found. Try again...")
             query = None
             continue
+            
+        # Debug: Zeige die Struktur der JSON-Daten
+        print("JSON-Daten Struktur:")
+        for i, item in enumerate(json_data):
+            print(f"  Item {i}: {item}")
 
         # Hier speichern wir alle gefundenen Anime in der Datenbank, bevor wir fortfahren
         if HAS_DATABASE:
@@ -220,10 +259,17 @@ def search_by_query(query: str) -> str:
                     # Anime-Link extrahieren und Details abrufen
                     anime_link = anime_item.get('link')
                     if anime_link:
+                        print(f"Original Link aus Suchergebnissen: '{anime_link}'")
                         logging.debug(f"Hole Details für Anime: {anime_link}")
                         # Vollständige URL erstellen, falls notwendig
                         if not anime_link.startswith('http'):
+                            print(f"Link beginnt nicht mit http, füge Präfix hinzu")
+                            # Prüfen, ob der Link bereits mit / beginnt
+                            if not anime_link.startswith('/'):
+                                anime_link = f"/anime/stream/{anime_link}"
                             anime_link = f"https://aniworld.to{anime_link}"
+                        
+                        print(f"Endgültiger Link für Abfrage: '{anime_link}'")
                         
                         # HTML-Inhalt der Anime-Detailseite abrufen
                         response = fetch_url_content(anime_link)

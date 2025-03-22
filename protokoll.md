@@ -157,6 +157,29 @@
   - Verbesserung der Fehlerbehandlung bei fehlerhaften oder unvollständigen Anime-Daten
   - Performance-Tests mit einer großen Anzahl von Suchergebnissen
 
+## [2024-07-25 16:15] Fehlerbehebung bei der Anime-Suche und Datenbankaktualisierung
+
+- **Geänderte Dateien**:
+  - `src/aniworld/search.py` - Korrektur der URL-Generierung für Anime-Links
+
+- **Zusammenfassung der Änderungen**:
+  - Ein kritischer Fehler bei der URL-Zusammensetzung während der Suche wurde behoben
+  - Das Problem war, dass Links wie "solo-leveling" direkt an "https://aniworld.to" angehängt wurden, was zu ungültigen URLs führte
+  - Die Korrektur stellt sicher, dass der Anime-Pfad "/anime/stream/" vor dem Slug hinzugefügt wird, wenn der Link nicht bereits richtig formatiert ist
+  - Zusätzliche Debug-Ausgaben wurden hinzugefügt, um die URL-Verarbeitung besser nachvollziehen zu können
+
+- **Aktueller Status**:
+  - Die Suchfunktion kann nun korrekt Anime-Daten abrufen und in der Datenbank speichern
+  - Die automatische Datenbankspeicherung funktioniert für alle Suchergebnisse
+  - Der Datenbankverbindungsfehler durch zirkuläre Importe wurde behoben
+  - Die konfigurierte Datenbank auf 192.168.178.9 ist erreichbar und einsatzbereit
+
+- **Nächste Schritte**:
+  - Entfernen der temporären Debug-Ausgaben, nachdem die Funktionalität bestätigt wurde
+  - Verbesserung der Fehlerbehandlung bei Netzwerkproblemen
+  - Optimierung der Datenbankabfragen für bessere Performance
+  - Implementierung einer asynchronen Datenbankspeicherung im Hintergrund
+
 ## Glossar
 
 ## Meilensteine 
