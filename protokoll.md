@@ -131,6 +131,32 @@
   - Optimierung der Datenbankabfragen für bessere Performance
   - Erweitern der CLI-Befehle um weitere administrative Funktionen
 
+## [2024-07-25 14:25] Automatische Datenbankaktualisierung bei Suchanfragen
+
+- **Geänderte Dateien**:
+  - `src/aniworld/search.py` - Erweitert, um Anime aus Suchergebnissen automatisch in der Datenbank zu speichern
+  - `src/aniworld/database/pipeline.py` - Import-Pfade korrigiert
+  - `src/aniworld/database/integration.py` - Import-Pfade korrigiert
+
+- **Zusammenfassung der Änderungen**:
+  - Die Suchfunktion `search_by_query` wurde erweitert, um alle gefundenen Anime automatisch in der Datenbank zu speichern
+  - Nach einer Suchanfrage werden alle angezeigten Anime vor der Benutzerauswahl in der Datenbank gespeichert
+  - Für jeden gefundenen Anime werden die Details von der Anime-Detailseite abgerufen
+  - Die extrahierten Informationen (inkl. Staffeln, Episoden und Metadaten) werden automatisch gespeichert
+  - Import-Pfade in den Datenbankmodulen wurden korrigiert, um Probleme mit relativen Imports zu beheben
+
+- **Aktueller Status**:
+  - Benutzer können nach Anime suchen und alle Suchergebnisse werden automatisch in der Datenbank gespeichert
+  - Die extrahierten Informationen umfassen Titel, Beschreibung, Cover-URL, Status, Jahr, Studio und Originaltitel
+  - Für jeden Anime werden auch die Staffel- und Episodeninformationen gespeichert
+  - Die Datenbank füllt sich automatisch, während der Benutzer die Anwendung normal nutzt
+
+- **Nächste Schritte**:
+  - Optimierung der Suchfunktion, um die Datenbankaktualisierung im Hintergrund durchzuführen
+  - Implementierung eines Fortschrittsindikators für länger dauernde Abfragen
+  - Verbesserung der Fehlerbehandlung bei fehlerhaften oder unvollständigen Anime-Daten
+  - Performance-Tests mit einer großen Anzahl von Suchergebnissen
+
 ## Glossar
 
 ## Meilensteine 

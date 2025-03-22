@@ -212,6 +212,29 @@ def search_by_query(query: str) -> str:
             query = None
             continue
 
+        # Hier speichern wir alle gefundenen Anime in der Datenbank, bevor wir fortfahren
+        if HAS_DATABASE:
+            logging.info(f"Speichere {len(json_data)} gefundene Anime in die Datenbank...")
+            for anime_item in json_data:
+                try:
+                    # Anime-Link extrahieren und Details abrufen
+                    anime_link = anime_item.get('link')
+                    if anime_link:
+                        logging.debug(f"Hole Details für Anime: {anime_link}")
+                        # Vollständige URL erstellen, falls notwendig
+                        if not anime_link.startswith('http'):
+                            anime_link = f"https://aniworld.to{anime_link}"
+                        
+                        # HTML-Inhalt der Anime-Detailseite abrufen
+                        response = fetch_url_content(anime_link)
+                        if response:
+                            html_content = response.decode()
+                            # Anime-Daten aus HTML extrahieren und in Datenbank speichern
+                            anime_id = save_anime_data_from_html(html_content, anime_link, anime_link.split('/')[-1])
+                            logging.info(f"Anime '{anime_item.get('name', 'Unbekannt')}' in Datenbank gespeichert mit ID: {anime_id}")
+                except Exception as e:
+                    logging.error(f"Fehler beim Speichern des Anime {anime_item.get('name', 'Unbekannt')}: {e}")
+
         if len(json_data) == 1:
             logging.debug("Only one anime found: %s", json_data[0])
             return json_data[0].get('link', 'No Link Found')

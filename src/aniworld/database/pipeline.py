@@ -5,7 +5,7 @@ Datenbankpipeline für die automatische Speicherung von gescrapten Daten
 import logging
 from typing import Dict, Any, Optional, List, Tuple
 
-from src.aniworld.database.integration import DatabaseIntegration
+from aniworld.database.integration import DatabaseIntegration
 
 
 class DatabasePipeline:

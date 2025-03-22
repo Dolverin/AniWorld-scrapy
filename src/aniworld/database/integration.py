@@ -5,8 +5,8 @@ Integrationsmodul für die Datenbankfunktionen
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 
-from src.aniworld.database.services import AnimeService, DownloadService
-from src.aniworld.database.models import AnimeSeries, Episode
+from aniworld.database.services import AnimeService, DownloadService
+from aniworld.database.models import AnimeSeries, Episode
 
 
 class DatabaseIntegration:
