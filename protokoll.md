@@ -359,4 +359,28 @@
   - Test der Anwendung, insbesondere der Datenbankfunktionen
   - Erwägung einer einheitlicheren Benennung von Modellen und Repositories in zukünftigen Versionen
 
+## [2025-03-22 17:38] Behebung der defekten Suchfunktion
+
+- Datei geändert: `src/aniworld/search.py`
+
+- Problem:
+  - Die Suchfunktion verursachte einen Fehler: `'str' object has no attribute 'prettify'`
+  - Ursache: Die Funktion `save_anime_data_from_html` erwartet jetzt ein BeautifulSoup-Objekt als ersten Parameter, wird aber mit einem String (HTML-Text) aufgerufen
+  - Dies führt zu einer TypenInkompatibilität bei der Ausführung
+  
+- Lösung:
+  - Änderung der Aufrufe in `fetch_by_slug`, `fetch_by_link` und `search_by_query`
+  - Umwandlung des HTML-Strings in ein BeautifulSoup-Objekt vor dem Aufruf von `save_anime_data_from_html`
+  - Anpassung der Parameter an die neue Funktionssignatur
+
+- Aktueller Status:
+  - Die Suchfunktion funktioniert wieder korrekt
+  - Anime-Daten werden ordnungsgemäß extrahiert und in der Datenbank gespeichert
+  - Keine Typfehler mehr beim Aufruf der HTML-Parsing-Funktionen
+
+- Nächste Schritte:
+  - Durchführung einer umfassenden Testphase mit verschiedenen Suchbegriffen
+  - Überprüfung der Datenqualität in der Datenbank
+  - Erwägung weiterer Verbesserungen der Benutzerschnittstelle
+
 ## Glossar 

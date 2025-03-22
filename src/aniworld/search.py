@@ -92,7 +92,8 @@ def fetch_by_slug(slug: str, not_found: str) -> str:
             try:
                 # Extrahiere Anime-Daten aus der Antwort
                 html_content = response.decode()
-                save_anime_data_from_html(html_content, url, slug)
+                soup = BeautifulSoup(html_content, 'html.parser')
+                save_anime_data_from_html(soup, url)
             except Exception as e:
                 logging.error(f"Fehler beim Speichern der Anime-Daten in der Datenbank: {e}")
         
@@ -113,7 +114,8 @@ def fetch_by_link(link: str, not_found: str) -> str:
                 try:
                     # Extrahiere Anime-Daten aus der Antwort
                     html_content = response.decode()
-                    save_anime_data_from_html(html_content, link, slug)
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    save_anime_data_from_html(soup, link)
                 except Exception as e:
                     logging.error(f"Fehler beim Speichern der Anime-Daten in der Datenbank: {e}")
             
@@ -426,8 +428,10 @@ def search_by_query(query: str) -> str:
                         response = fetch_url_content(anime_link)
                         if response:
                             html_content = response.decode()
+                            # HTML-Inhalt in BeautifulSoup-Objekt umwandeln
+                            soup = BeautifulSoup(html_content, 'html.parser')
                             # Anime-Daten aus HTML extrahieren und in Datenbank speichern
-                            anime_id = save_anime_data_from_html(html_content, anime_link, anime_link.split('/')[-1])
+                            anime_id = save_anime_data_from_html(soup, anime_link)
                             logging.info(f"Anime '{anime_item.get('name', 'Unbekannt')}' in Datenbank gespeichert mit ID: {anime_id}")
                 except Exception as e:
                     logging.error(f"Fehler beim Speichern des Anime {anime_item.get('name', 'Unbekannt')}: {e}")
