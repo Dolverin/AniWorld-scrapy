@@ -19,7 +19,6 @@ from aniworld.common import (
     fetch_url_content,
     display_ascii_art,
     show_messagebox,
-    random_user_agent,
 )
 from aniworld.models import AnimeSeries, Season, Episode
 from aniworld.database.repositories import AnimeSeriesRepository, SeasonRepository, EpisodeRepository

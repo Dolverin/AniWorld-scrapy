@@ -316,4 +316,25 @@
   - Prüfen der Datenqualität in der Datenbank
   - Ergänzen der Benutzerschnittstelle zur besseren Anzeige der Metadaten
 
+## [2025-03-22 17:18] Behebung eines Import-Fehlers
+
+- Datei geändert: `src/aniworld/search.py`
+
+- Problem:
+  - Die Anwendung startete nicht mit dem Fehler: `ImportError: cannot import name 'random_user_agent' from 'aniworld.common'`
+  - Die Funktion `random_user_agent` existiert nicht in der `common.py` Datei, wird aber in `search.py` importiert
+  
+- Lösung:
+  - Entfernung des nicht existierenden Imports aus der Import-Liste in `search.py`
+  - Das Programm kann nun wieder normal gestartet werden
+
+- Aktueller Status:
+  - Der grundlegende Startprozess der Anwendung funktioniert wieder
+  - Es wurden keine funktionalen Änderungen vorgenommen, nur der fehlerhafte Import entfernt
+
+- Nächste Schritte:
+  - Überprüfung auf weitere fehlende Imports in anderen Modulen
+  - Überprüfung, ob die Funktion `random_user_agent` an anderer Stelle implementiert werden muss
+  - Test der Anwendung mit allen Hauptfunktionen
+
 ## Glossar 
