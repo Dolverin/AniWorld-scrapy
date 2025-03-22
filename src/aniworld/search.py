@@ -21,7 +21,7 @@ from aniworld.common import (
     show_messagebox,
 )
 from aniworld.models import AnimeSeries, Season, Episode
-from aniworld.database.repositories import AnimeSeriesRepository, SeasonRepository, EpisodeRepository
+from aniworld.database.repositories import AnimeRepository, SeasonRepository, EpisodeRepository
 
 # Logger für dieses Modul einrichten
 module_log = logging.getLogger(__name__)
@@ -306,7 +306,7 @@ def save_anime_data_from_html(
     # Speichere die Daten in der Datenbank
     try:
         # 1. Speichere oder aktualisiere den Anime
-        anime_repo = AnimeSeriesRepository(session)
+        anime_repo = AnimeRepository(session)
         anime = anime_repo.find_by_url(anime_link)
 
         if anime is None:

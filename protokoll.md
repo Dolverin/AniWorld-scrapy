@@ -337,4 +337,26 @@
   - Überprüfung, ob die Funktion `random_user_agent` an anderer Stelle implementiert werden muss
   - Test der Anwendung mit allen Hauptfunktionen
 
+## [2025-03-22 17:25] Korrektur des Repository-Imports
+
+- Datei geändert: `src/aniworld/search.py`
+
+- Problem:
+  - Nach der Korrektur des random_user_agent-Imports trat ein neuer Fehler auf:
+  - `ImportError: cannot import name 'AnimeSeriesRepository' from 'aniworld.database.repositories'`
+  - Es gibt eine Diskrepanz zwischen dem Klassennamen im Importstatement und der tatsächlichen Implementierung
+  
+- Lösung:
+  - Korrektur des Imports von `AnimeSeriesRepository` zu `AnimeRepository`
+  - Aktualisierung der Referenz im Code, wo die Repository-Instanz erstellt wird
+
+- Aktueller Status:
+  - Die Import-Statements sind nun korrekt mit den tatsächlich implementierten Klassen abgestimmt
+  - Die Namensunterschiede zwischen Modell (AnimeSeries) und Repository (AnimeRepository) wurden behoben
+
+- Nächste Schritte:
+  - Überprüfung auf weitere Inkonsistenzen in den Namenskonventionen
+  - Test der Anwendung, insbesondere der Datenbankfunktionen
+  - Erwägung einer einheitlicheren Benennung von Modellen und Repositories in zukünftigen Versionen
+
 ## Glossar 
