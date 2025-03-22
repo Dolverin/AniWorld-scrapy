@@ -142,240 +142,250 @@ def save_anime_data_from_html(
     should_close_session = False
     if session is None:
         from aniworld.database import SessionLocal
+        try:
+            session = SessionLocal()
+            should_close_session = True
+        except Exception as e:
+            module_log.error(f"Fehler beim Erstellen der Datenbankverbindung: {e}")
+            return None
 
-        session = SessionLocal()
-        should_close_session = True
-
-    soup_content = soup.prettify()
-    if "Wartungsarbeiten" in soup_content or "Wir aktualisieren" in soup_content:
-        module_log.error(f"Wartungsarbeiten oder Update der Seite: {anime_link}")
-        return None
-
-    anime_data = {}
-
-    # Extract anime title
-    anime_title_element = soup.select_one("h1.seriesCoverMainTitle")
-    if anime_title_element:
-        anime_title = anime_title_element.text.strip()
-        anime_data["title"] = anime_title
-    else:
-        module_log.debug(f"Kein Anime-Titel gefunden in: {anime_link}")
-        return None
-
-    # Extract anime description
-    description_element = soup.select_one("div.seriesTooltipDescription")
-    if description_element:
-        # Entferne <br> Tags und ersetze sie durch Zeilenumbrüche
-        for br in description_element.find_all("br"):
-            br.replace_with("\n")
-        anime_data["description"] = description_element.text.strip()
-    else:
-        anime_data["description"] = None
-        module_log.debug(f"Keine Beschreibung gefunden für: {anime_title}")
-
-    # Extract cover image URL
-    cover_image = None
-    
-    # Erste Versuch: Aus dem Hero-Banner
-    hero_image = soup.select_one("div.seriesContentWrapper img.seriesCover")
-    if hero_image and hero_image.get("src"):
-        cover_image = hero_image["src"]
-    
-    # Zweiter Versuch: Aus dem seriesCoverContainer
-    if not cover_image:
-        cover_container = soup.select_one("div.seriesCoverContainer img")
-        if cover_container and cover_container.get("src"):
-            cover_image = cover_container["src"]
-    
-    # Dritter Versuch: Suche nach allen Bildern mit "cover" im Klassennamen
-    if not cover_image:
-        cover_images = soup.select("img[class*='cover']")
-        if cover_images and cover_images[0].get("src"):
-            cover_image = cover_images[0]["src"]
-    
-    anime_data["cover_image"] = cover_image
-    
-    # Extract genres
-    genres = []
-    genre_links = soup.select("a[href*='/genre/']")
-    for genre_link in genre_links:
-        genre_text = genre_link.text.strip()
-        if genre_text and genre_text not in genres:
-            genres.append(genre_text)
-            
-    anime_data["genres"] = genres if genres else None
-    
-    if anime_data["genres"]:
-        module_log.debug(f"Extrahierte Genres für {anime_title}: {anime_data['genres']}")
-
-    # Extract seasons and episodes
-    seasons_container = soup.select_one("div.seasons-wrapper")
-    
-    # Debugging für Staffel-Container
-    if not seasons_container:
-        module_log.debug(f"Kein seasons-wrapper für {anime_title} gefunden.")
-        # Versuche alternative Klassen zu finden
-        all_classes = [div.get("class", []) for div in soup.find_all("div")]
-        possible_season_classes = [cls for class_list in all_classes for cls in class_list if "season" in cls.lower()]
-        if possible_season_classes:
-            module_log.debug(f"Mögliche season-Klassen: {possible_season_classes}")
-        
-        # Zeige einen Ausschnitt des HTML-Codes
-        module_log.debug(f"HTML-Vorschau: {soup_content[:1000]}...")
-
-    seasons = []
-    
-    # Sammle alle verfügbaren Season-IDs
-    season_elements = soup.select("[data-season-id]")
-    season_ids = set()
-    for season_element in season_elements:
-        season_id = season_element.get("data-season-id")
-        if season_id and season_id.isdigit():
-            season_ids.add(int(season_id))
-    
-    # Extrahiere Episodentitel aus der Tabelle
-    episode_titles = {}
-    episode_table = soup.select_one("table.seasonEpisodesTable")
-    if episode_table:
-        rows = episode_table.select("tr")
-        for row in rows:
-            # Überspringe Header-Zeilen
-            if row.select_one("th"):
-                continue
-                
-            # Überprüfe, ob dies eine Episodenzeile ist
-            episode_number_cell = row.select_one("td.seasonEpisodeNumber")
-            episode_title_cell = row.select_one("td.seasonEpisodeTitle")
-            
-            if episode_number_cell and episode_title_cell:
-                try:
-                    # Extrahiere die Episodennummer
-                    episode_text = episode_number_cell.text.strip()
-                    # Entferne alle nicht-numerischen Zeichen
-                    episode_num = int(''.join(filter(str.isdigit, episode_text)))
-                    
-                    # Extrahiere den tatsächlichen Titel
-                    title = episode_title_cell.text.strip()
-                    if title:
-                        episode_titles[episode_num] = title
-                        module_log.debug(f"Extrahierter Episodentitel: Episode {episode_num} - {title}")
-                except (ValueError, IndexError) as e:
-                    module_log.debug(f"Fehler beim Extrahieren des Episodentitels: {e}")
-    
-    # Extrahiere Informationen für jede Staffel
-    for season_id in sorted(season_ids):
-        season_data = {"season_id": season_id, "episodes": []}
-        
-        # Extrahiere Episode-Links für diese Staffel
-        episode_links = soup.select(f"[data-season-id='{season_id}'] a[data-episode-id]")
-        
-        for episode_link in episode_links:
-            episode_id = episode_link.get("data-episode-id")
-            if not episode_id or not episode_id.isdigit():
-                continue
-                
-            episode_id = int(episode_id)
-            episode_url = episode_link.get("href")
-            
-            # Standard-Titel (wird verwendet, wenn kein besserer gefunden wird)
-            episode_title = episode_link.get("title", f"Staffel {season_id} Episode {episode_id}")
-            
-            # Versuche, den tatsächlichen Episodentitel zu verwenden, wenn verfügbar
-            if episode_id in episode_titles:
-                episode_title = episode_titles[episode_id]
-                
-            episode_data = {
-                "episode_id": episode_id,
-                "title": episode_title,
-                "url": f"https://aniworld.to{episode_url}" if episode_url.startswith("/") else episode_url,
-            }
-            season_data["episodes"].append(episode_data)
-            
-        if season_data["episodes"]:
-            seasons.append(season_data)
-
-    anime_data["seasons"] = seasons
-    module_log.debug(f"Anzahl Staffeln in den Daten: {len(seasons)}")
-
-    # Im Anime Link keine trailing slashes für die Datenbank
-    if anime_link.endswith("/"):
-        anime_link = anime_link[:-1]
-
-    if "seasons" not in anime_data or not anime_data["seasons"]:
-        module_log.debug(f"Keine Staffeldaten im anime_data Dictionary gefunden!")
-        return None
-
-    # Speichere die Daten in der Datenbank
     try:
-        # 1. Speichere oder aktualisiere den Anime
-        anime_repo = AnimeRepository(session)
-        anime = anime_repo.find_by_url(anime_link)
+        soup_content = soup.prettify()
+        if "Wartungsarbeiten" in soup_content or "Wir aktualisieren" in soup_content:
+            module_log.error(f"Wartungsarbeiten oder Update der Seite: {anime_link}")
+            return None
 
-        if anime is None:
-            anime = AnimeSeries(
-                title=anime_data["title"],
-                url=anime_link,
-                description=anime_data["description"],
-                cover_image=anime_data["cover_image"],
-                genres=",".join(anime_data["genres"]) if anime_data["genres"] else None,
-            )
-            anime_repo.save(anime)
+        anime_data = {}
+
+        # Extract anime title
+        anime_title_element = soup.select_one("h1.seriesCoverMainTitle")
+        if anime_title_element:
+            anime_title = anime_title_element.text.strip()
+            anime_data["title"] = anime_title
         else:
-            # Aktualisieren der bestehenden Anime-Daten
-            anime.title = anime_data["title"]
-            anime.description = anime_data["description"]
-            anime.cover_image = anime_data["cover_image"]
-            anime.genres = ",".join(anime_data["genres"]) if anime_data["genres"] else None
-            anime.updated_at = datetime.now()
-            anime_repo.update(anime)
+            module_log.debug(f"Kein Anime-Titel gefunden in: {anime_link}")
+            return None
 
-        # 2. Speichere oder aktualisiere die Staffeln
-        season_repo = SeasonRepository(session)
-        for season_data in anime_data["seasons"]:
-            season_id = season_data["season_id"]
-            season = season_repo.find_by_anime_and_season_id(anime.id, season_id)
+        # Extract anime description
+        description_element = soup.select_one("div.seriesTooltipDescription")
+        if description_element:
+            # Entferne <br> Tags und ersetze sie durch Zeilenumbrüche
+            for br in description_element.find_all("br"):
+                br.replace_with("\n")
+            anime_data["description"] = description_element.text.strip()
+        else:
+            anime_data["description"] = None
+            module_log.debug(f"Keine Beschreibung gefunden für: {anime_title}")
 
-            if season is None:
-                season = Season(
-                    anime_id=anime.id,
-                    season_id=season_id,
+        # Extract cover image URL
+        cover_image = None
+        
+        # Erste Versuch: Aus dem Hero-Banner
+        hero_image = soup.select_one("div.seriesContentWrapper img.seriesCover")
+        if hero_image and hero_image.get("src"):
+            cover_image = hero_image["src"]
+        
+        # Zweiter Versuch: Aus dem seriesCoverContainer
+        if not cover_image:
+            cover_container = soup.select_one("div.seriesCoverContainer img")
+            if cover_container and cover_container.get("src"):
+                cover_image = cover_container["src"]
+        
+        # Dritter Versuch: Suche nach allen Bildern mit "cover" im Klassennamen
+        if not cover_image:
+            cover_images = soup.select("img[class*='cover']")
+            if cover_images and cover_images[0].get("src"):
+                cover_image = cover_images[0]["src"]
+        
+        anime_data["cover_image"] = cover_image
+        
+        # Extract genres
+        genres = []
+        genre_links = soup.select("a[href*='/genre/']")
+        for genre_link in genre_links:
+            genre_text = genre_link.text.strip()
+            if genre_text and genre_text not in genres:
+                genres.append(genre_text)
+            
+        anime_data["genres"] = genres if genres else None
+        
+        if anime_data["genres"]:
+            module_log.debug(f"Extrahierte Genres für {anime_title}: {anime_data['genres']}")
+
+        # Extract seasons and episodes
+        seasons_container = soup.select_one("div.seasons-wrapper")
+        
+        # Debugging für Staffel-Container
+        if not seasons_container:
+            module_log.debug(f"Kein seasons-wrapper für {anime_title} gefunden.")
+            # Versuche alternative Klassen zu finden
+            all_classes = [div.get("class", []) for div in soup.find_all("div")]
+            possible_season_classes = [cls for class_list in all_classes for cls in class_list if "season" in cls.lower()]
+            if possible_season_classes:
+                module_log.debug(f"Mögliche season-Klassen: {possible_season_classes}")
+        
+            # Zeige einen Ausschnitt des HTML-Codes
+            module_log.debug(f"HTML-Vorschau: {soup_content[:1000]}...")
+
+        seasons = []
+        
+        # Sammle alle verfügbaren Season-IDs
+        season_elements = soup.select("[data-season-id]")
+        season_ids = set()
+        for season_element in season_elements:
+            season_id = season_element.get("data-season-id")
+            if season_id and season_id.isdigit():
+                season_ids.add(int(season_id))
+        
+        # Extrahiere Episodentitel aus der Tabelle
+        episode_titles = {}
+        episode_table = soup.select_one("table.seasonEpisodesTable")
+        if episode_table:
+            rows = episode_table.select("tr")
+            for row in rows:
+                # Überspringe Header-Zeilen
+                if row.select_one("th"):
+                    continue
+                
+                # Überprüfe, ob dies eine Episodenzeile ist
+                episode_number_cell = row.select_one("td.seasonEpisodeNumber")
+                episode_title_cell = row.select_one("td.seasonEpisodeTitle")
+                
+                if episode_number_cell and episode_title_cell:
+                    try:
+                        # Extrahiere die Episodennummer
+                        episode_text = episode_number_cell.text.strip()
+                        # Entferne alle nicht-numerischen Zeichen
+                        episode_num = int(''.join(filter(str.isdigit, episode_text)))
+                        
+                        # Extrahiere den tatsächlichen Titel
+                        title = episode_title_cell.text.strip()
+                        if title:
+                            episode_titles[episode_num] = title
+                            module_log.debug(f"Extrahierter Episodentitel: Episode {episode_num} - {title}")
+                    except (ValueError, IndexError) as e:
+                        module_log.debug(f"Fehler beim Extrahieren des Episodentitels: {e}")
+        
+        # Extrahiere Informationen für jede Staffel
+        for season_id in sorted(season_ids):
+            season_data = {"season_id": season_id, "episodes": []}
+            
+            # Extrahiere Episode-Links für diese Staffel
+            episode_links = soup.select(f"[data-season-id='{season_id}'] a[data-episode-id]")
+            
+            for episode_link in episode_links:
+                episode_id = episode_link.get("data-episode-id")
+                if not episode_id or not episode_id.isdigit():
+                    continue
+                
+                episode_id = int(episode_id)
+                episode_url = episode_link.get("href")
+                
+                # Standard-Titel (wird verwendet, wenn kein besserer gefunden wird)
+                episode_title = episode_link.get("title", f"Staffel {season_id} Episode {episode_id}")
+                
+                # Versuche, den tatsächlichen Episodentitel zu verwenden, wenn verfügbar
+                if episode_id in episode_titles:
+                    episode_title = episode_titles[episode_id]
+                
+                episode_data = {
+                    "episode_id": episode_id,
+                    "title": episode_title,
+                    "url": f"https://aniworld.to{episode_url}" if episode_url.startswith("/") else episode_url,
+                }
+                season_data["episodes"].append(episode_data)
+            
+            if season_data["episodes"]:
+                seasons.append(season_data)
+
+        anime_data["seasons"] = seasons
+        module_log.debug(f"Anzahl Staffeln in den Daten: {len(seasons)}")
+
+        # Im Anime Link keine trailing slashes für die Datenbank
+        if anime_link.endswith("/"):
+            anime_link = anime_link[:-1]
+
+        if "seasons" not in anime_data or not anime_data["seasons"]:
+            module_log.debug(f"Keine Staffeldaten im anime_data Dictionary gefunden!")
+            return None
+
+        # Speichere die Daten in der Datenbank
+        try:
+            # 1. Speichere oder aktualisiere den Anime
+            anime_repo = AnimeRepository(session)
+            anime = anime_repo.find_by_url(anime_link)
+
+            if anime is None:
+                anime = AnimeSeries(
+                    title=anime_data["title"],
+                    url=anime_link,
+                    description=anime_data["description"],
+                    cover_image=anime_data["cover_image"],
+                    genres=",".join(anime_data["genres"]) if anime_data["genres"] else None,
                 )
-                season_repo.save(season)
+                anime_repo.save(anime)
+            else:
+                # Aktualisieren der bestehenden Anime-Daten
+                anime.title = anime_data["title"]
+                anime.description = anime_data["description"]
+                anime.cover_image = anime_data["cover_image"]
+                anime.genres = ",".join(anime_data["genres"]) if anime_data["genres"] else None
+                anime.updated_at = datetime.now()
+                anime_repo.update(anime)
 
-            # 3. Speichere oder aktualisiere die Episoden
-            episode_repo = EpisodeRepository(session)
-            for episode_data in season_data["episodes"]:
-                episode_id = episode_data["episode_id"]
-                episode = episode_repo.find_by_season_and_episode_id(
-                    season.id, episode_id
-                )
+            # 2. Speichere oder aktualisiere die Staffeln
+            season_repo = SeasonRepository(session)
+            for season_data in anime_data["seasons"]:
+                season_id = season_data["season_id"]
+                season = season_repo.find_by_anime_and_season_id(anime.id, season_id)
 
-                if episode is None:
-                    episode = Episode(
-                        season_id=season.id,
-                        episode_id=episode_id,
-                        title=episode_data["title"],
-                        url=episode_data["url"],
+                if season is None:
+                    season = Season(
+                        anime_id=anime.id,
+                        season_id=season_id,
                     )
-                    episode_repo.save(episode)
-                else:
-                    # Aktualisiere den Episodentitel, wenn ein besserer gefunden wurde
-                    if episode_data["title"] != f"Staffel {season_id} Episode {episode_id}":
-                        episode.title = episode_data["title"]
-                        episode.updated_at = datetime.now()
-                        episode_repo.update(episode)
+                    season_repo.save(season)
 
-        return anime
+                # 3. Speichere oder aktualisiere die Episoden
+                episode_repo = EpisodeRepository(session)
+                for episode_data in season_data["episodes"]:
+                    episode_id = episode_data["episode_id"]
+                    episode = episode_repo.find_by_season_and_episode_id(
+                        season.id, episode_id
+                    )
 
-    except Exception as e:
-        module_log.error(f"Fehler beim Speichern der Anime-Daten: {e}")
-        traceback.print_exc()
-        if should_close_session:
-            session.rollback()
-        return None
+                    if episode is None:
+                        episode = Episode(
+                            season_id=season.id,
+                            episode_id=episode_id,
+                            title=episode_data["title"],
+                            url=episode_data["url"],
+                        )
+                        episode_repo.save(episode)
+                    else:
+                        # Aktualisiere den Episodentitel, wenn ein besserer gefunden wurde
+                        if episode_data["title"] != f"Staffel {season_id} Episode {episode_id}":
+                            episode.title = episode_data["title"]
+                            episode.updated_at = datetime.now()
+                            episode_repo.update(episode)
+
+            return anime
+
+        except Exception as e:
+            module_log.error(f"Fehler beim Speichern der Anime-Daten: {e}")
+            traceback.print_exc()
+            if should_close_session:
+                try:
+                    session.rollback()
+                except:
+                    pass
+            return None
     finally:
-        if should_close_session:
-            session.close()
+        if should_close_session and session:
+            try:
+                session.close()
+            except:
+                pass
 
 
 def search_by_query(query: str) -> str:

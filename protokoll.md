@@ -462,4 +462,28 @@
   2. Verbesserung der Genre-Extraktion aus der Website
   3. Weitere Optimierung der Captcha-Erkennung und -Behandlung
 
+## [2025-03-22 18:00] Behebung des SessionLocal-Import-Fehlers
+
+- **Geänderte Dateien**:
+  - `src/aniworld/database/__init__.py` - SessionLocal-Funktion implementiert
+  - `src/aniworld/search.py` - Fehlerbehandlung für SessionLocal verbessert
+
+- **Problem**:
+  Bei der Anime-Suche trat ein Fehler auf: `cannot import name 'SessionLocal' from 'aniworld.database'`. Diese Funktion wurde im Modul verwendet, war aber nicht definiert. Dies verhinderte das korrekte Speichern von Suchergebnissen in der Datenbank.
+
+- **Lösung**:
+  1. Implementierung einer `SessionLocal()`-Funktion im Datenbank-Modul, die eine neue MySQL-Verbindung erstellt
+  2. Export der Funktion in `__all__` für korrekten Import
+  3. Verbesserung der Fehlerbehandlung bei der Verwendung von SessionLocal in der Suchroutine
+
+- **Aktueller Status**:
+  - Die Anwendung kann nun wieder korrekt auf die Datenbank zugreifen
+  - Die Suche funktioniert und Anime-Daten werden in der Datenbank gespeichert
+  - Es gibt noch einen UI-Fehler mit curses bei der Anzeige der Suchergebnisse (`addwstr() returned ERR`)
+
+- **Nächste Schritte**:
+  1. Behebung des curses-Fehlers bei der Anzeige der Suchergebnisse
+  2. Verbesserung der Fehlerbehandlung bei der Datenbankanbindung
+  3. Optimierung der Performance der Datenbankzugriffe
+
 ## Glossar 
