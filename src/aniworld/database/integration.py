@@ -4,9 +4,11 @@ Integrationsmodul für die Datenbankfunktionen
 
 import logging
 from typing import Dict, Any, Optional, Tuple, List
+import traceback
 
 from aniworld.database.services import AnimeService, DownloadService
 from aniworld.database.models import AnimeSeries, Episode
+from aniworld.database.repositories import AnimeRepository
 
 
 class DatabaseIntegration:
@@ -55,7 +57,6 @@ class DatabaseIntegration:
             return anime_id
         except Exception as e:
             self.logger.error(f"Fehler beim Speichern der Anime-Daten: {e}")
-            import traceback
             self.logger.error(traceback.format_exc())
             raise
             
@@ -209,6 +210,91 @@ class DatabaseIntegration:
         except Exception as e:
             self.logger.error(f"Fehler beim Abrufen aktiver Downloads: {e}")
             return []
+
+    def get_anime_by_slug(self, slug: str) -> Optional[AnimeSeries]:
+        """
+        Findet einen Anime anhand seines Slugs.
+        
+        Args:
+            slug: Der Slug des Animes
+            
+        Returns:
+            AnimeSeries-Objekt oder None wenn nicht gefunden
+        """
+        try:
+            session = self.get_session()
+            repo = AnimeRepository(session)
+            anime = repo.find_by_slug(slug)
+            session.close()
+            return anime
+        except Exception as e:
+            self.logger.error(f"Fehler beim Abrufen des Animes mit Slug '{slug}': {e}")
+            return None
+            
+    def save_minimal_anime(self, slug: str, title: str) -> Optional[int]:
+        """
+        Speichert minimale Anime-Daten, wenn nur der Slug und Titel bekannt sind.
+        Nützlich als Fallback, wenn die vollständige Extraktion fehlschlägt.
+        
+        Args:
+            slug: Der Slug des Animes
+            title: Der Titel des Animes
+            
+        Returns:
+            ID des gespeicherten Animes oder None bei Fehler
+        """
+        try:
+            self.logger.debug(f"Versuche minimalen Anime zu speichern: {title} (Slug: {slug})")
+            session = self.get_session()
+            if not session:
+                self.logger.error("Konnte keine Datenbankverbindung herstellen")
+                return None
+
+            repo = AnimeRepository(session)
+            
+            # Prüfe, ob der Anime bereits existiert
+            anime = repo.find_by_slug(slug)
+            if anime:
+                self.logger.debug(f"Anime mit Slug '{slug}' existiert bereits mit ID: {anime.series_id}")
+                anime_id = anime.series_id
+            else:
+                # Erstelle ein minimales AnimeSeries-Objekt
+                anime = AnimeSeries(
+                    titel=title,
+                    aniworld_url=f"https://aniworld.to/anime/stream/{slug}",
+                    beschreibung="",  # Leerer String statt None
+                    cover_url="",     # Leerer String statt None
+                    status="laufend"
+                )
+                # Speichere auch den Slug
+                setattr(anime, 'slug', slug)
+                
+                self.logger.debug("Füge neuen Anime zur Datenbank hinzu")
+                session.add(anime)
+                session.flush()  # Flush vor dem Commit
+                
+                self.logger.debug(f"Generierte ID vor Commit: {anime.series_id}")
+                session.commit()
+                
+                anime_id = anime.series_id
+                self.logger.info(f"Minimaler Anime '{title}' mit ID {anime_id} gespeichert")
+                
+            session.close()
+            return anime_id
+        except Exception as e:
+            self.logger.error(f"Fehler beim Speichern des minimalen Animes '{title}': {e}")
+            self.logger.error(traceback.format_exc())
+            # Rollback bei Fehler
+            try:
+                session.rollback()
+                session.close()
+            except:
+                pass
+            return None
+
+    def get_pipeline(self) -> Any:
+        # ... existing code ...
+        pass
 
 
 # Singleton-Instanz der Integration

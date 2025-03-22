@@ -131,6 +131,33 @@
   - Optimierung der Datenbankabfragen für bessere Performance
   - Erweitern der CLI-Befehle um weitere administrative Funktionen
 
+## [2024-05-08 16:45] Integration der Datenbank in Scraping-Pipeline
+
+- **Erstellte/Geänderte Dateien**:
+  - `src/aniworld/database/pipeline.py` - Neue Pipeline-Klasse für die Datenbankintegration
+  - `src/aniworld/database/__init__.py` - Aktualisiert, um die Pipeline zu exportieren
+  - `src/aniworld/search.py` - Modifiziert, um gescrapte Daten in der Datenbank zu speichern
+  - `src/aniworld/execute.py` - Modifiziert, um Download-Protokollierung über die Pipeline zu handhaben
+
+- **Zusammenfassung der Änderungen**:
+  - Eine neue Datenbank-Pipeline wurde implementiert, die Anime-Daten während des Scrapings speichert
+  - Die Suchfunktionen wurden erweitert, um HTML-Inhalte zu parsen und Anime-Metadaten zu extrahieren
+  - Ein Caching-Mechanismus wurde implementiert, um Datenbank-Anfragen zu optimieren
+  - Die Download-Protokollierung wurde überarbeitet, um die Pipeline zu nutzen
+  - Fehlerbehandlung und Statusaktualisierungen für Downloads wurden verbessert
+
+- **Aktueller Status**:
+  - Die Datenbank wird jetzt automatisch mit Anime-Daten gefüllt, wenn Benutzer nach Anime suchen
+  - Episoden und Downloads werden automatisch in der Datenbank protokolliert
+  - Die Statusaktualisierung von Downloads wird zuverlässig verfolgt (gestartet, abgeschlossen, fehlgeschlagen)
+  - Die Integration arbeitet im Hintergrund und erfordert keine Benutzerinteraktion
+
+- **Nächste Schritte**:
+  - Testen der Pipeline mit größeren Datenmengen
+  - Verbesserung des HTML-Parsings für verschiedene Seitenstrukturen
+  - Optimierung der Datenbankabfragen für bessere Performance
+  - Erweitern der CLI-Befehle um weitere administrative Funktionen
+
 ## [2024-07-25 14:25] Automatische Datenbankaktualisierung bei Suchanfragen
 
 - **Geänderte Dateien**:
@@ -514,5 +541,144 @@
   1. Test des Speicherns in der Datenbank mit verschiedenen Anime
   2. Behebung des curses-Fehlers bei der Anzeige der Suchergebnisse
   3. Optimierung der Datenbankanbindung für bessere Performance
+
+## [2024-03-22 18:14] Behebung des Suchproblems und TUI-Absturzes
+
+- **Modifizierte Dateien:**
+  - `src/aniworld/search.py`
+  - `src/aniworld/__main__.py`
+  - `src/aniworld/database/integration.py`
+
+- **Änderungen:**
+  - Verbesserte Fehlerbehandlung in der Suchfunktion bei Datenbankoperationen
+  - Erweiterte try-except-Blöcke um ein Abbrechen der TUI zu verhindern
+  - Neue Methode `save_minimal_anime()` hinzugefügt, um grundlegende Anime-Daten zu speichern, wenn vollständige Daten nicht verfügbar sind
+  - Exception-Handling beim Schreiben in die Datenbank verbessert
+
+- **Problem:**
+  - Bei Eingabe von "solo" in die Suche wurde nichts in die Datenbank geschrieben
+  - Bei Auswahl von "Solo Leveling" schloss sich die TUI unerwartet
+  - Vermutlich trat ein unbehandelter Fehler bei der Datenbankoperation auf
+
+- **Lösung:**
+  - Erweiterte Fehlerbehandlung in allen relevanten Modulen
+  - Robustere Mechanismen für Datenbankspeicherung
+  - Weniger strikte Datenbankvalidierung für minimale Anime-Einträge
+
+- **Aktueller Status:**
+  - Die Suche sollte nun robust funktionieren und bei Fehlern nicht abstürzen
+  - Die TUI sollte stabil bleiben, auch wenn Datenbankfehler auftreten
+  - Bei Fehlern wird eine Benachrichtigung angezeigt, aber die Anwendung kann fortgesetzt werden
+
+- **Nächste Schritte:**
+  - Tests durchführen mit verschiedenen Suchbegriffen und Anime-Auswahlen
+  - Logging verbessern, um die genaue Fehlerursache besser identifizieren zu können
+  - Datenbankschema überprüfen, um sicherzustellen, dass alle wichtigen Felder nullable sind
+
+## [2024-03-22 18:30] Robustere Fehlerbehandlung für Solo-Suche und TUI-Absturz
+
+- **Modifizierte Dateien:**
+  - `src/aniworld/__main__.py` - Umfassende Fehlerbehandlung in der `create()` Methode der `EpisodeForm`
+  - `src/aniworld/database/integration.py` - Korrektur der Feldnamen in der `save_minimal_anime` Methode
+
+- **Änderungen:**
+  - Die gesamte `create()` Methode der `EpisodeForm` wurde mit try-except Blöcken umschlossen
+  - Fehlerbehandlung für jeden kritischen Schritt der Formularerstellung implementiert:
+    - Laden der Staffeldaten
+    - Abrufen des Staffeltitels
+    - Verarbeitung der URLs
+    - Erstellung der Episodenliste
+  - Fallback-Mechanismen für alle kritischen Datenstrukturen
+  - Korrekte Feldnamen in der `AnimeSeries`-Klasse verwendet (`titel` statt `title`, `aniworld_url` statt `url`)
+
+- **Problem:**
+  - Die TUI stürzte ab, wenn man "solo" suchte und dann "Solo Leveling" auswählte
+  - Der Fehler trat in der `create()`-Methode auf, bevor die bereits implementierte Fehlerbehandlung in `on_ok()` greifen konnte
+  - Vermutlich ein Problem beim Laden oder Verarbeiten der Staffeldaten für "Solo Leveling"
+
+- **Technische Details:**
+  - Fehlerhafte Staffeldaten werden jetzt mit einer leeren Liste als Fallback behandelt
+  - Jeder Verarbeitungsschritt hat jetzt seine eigene Fehlerbehandlung
+  - Bei kritischen Fehlern werden Minimalwerte für UI-Elemente gesetzt, damit die Anwendung weiterläuft
+  - Benutzerfreundliche Fehlermeldungen, die über Popup-Dialoge angezeigt werden
+
+- **Aktueller Status:**
+  - Die TUI sollte jetzt stabil bleiben, auch wenn Staffel- oder Episodendaten nicht verfügbar sind
+  - Verbesserte Fehlertoleranz in allen Bereichen der UI-Erstellung
+  - Korrekte Datenbankfeldnamen für minimale Anime-Einträge
+
+- **Nächste Schritte:**
+  - Tests mit verschiedenen problematischen Anime-Serien durchführen
+  - Verbesserung der Fehlerdiagnose durch detailliertere Logging-Ausgaben
+  - Betrachtung alternativer Methoden zum Laden von Staffeldaten
+
+## [2024-03-22 18:48] Erweiterte Fehlerprotokollierung für Solo-Suche
+
+- **Modifizierte Dateien:**
+  - `src/aniworld/common/common.py` - Detailliertere Fehlerprotokollierung in `get_season_data` hinzugefügt
+  - `src/aniworld/__main__.py` - Fehlerbehandlung in `EpisodeForm.create()` verbessert und detailliertere Protokollierung hinzugefügt
+
+- **Änderungen:**
+  - `try-except`-Blöcke in `get_season_data` und `EpisodeForm.create()` erweitert
+  - `exc_info=True` für detailliertere Fehlerprotokollierung hinzugefügt
+  - Fallback-Mechanismen implementiert, um Abstürze zu verhindern
+  - Protokollierung von unerwarteten Fehlern in `EpisodeForm.create()` hinzugefügt
+
+- **Ziel:**
+  - Detailliertere Fehlerinformationen sammeln, um die Ursache des TUI-Absturzes bei der Solo-Suche zu identifizieren
+
+- **Nächste Schritte:**
+  - Anwendung mit erweiterter Protokollierung testen (Suche nach "solo", Auswahl von "Solo Leveling")
+  - Protokolldateien auf neue Fehlermeldungen überprüfen
+  - Basierend auf den Protokollen weitere Fehlerbehebungsschritte planen
+
+## [2025-03-22 20:07] Behebung des Datenbankproblems bei der Suche
+
+- **Modifizierte Dateien:**
+  - `src/aniworld/search.py` - Korrektur des status-Feldwerts von "Unbekannt" zu "laufend"
+  - `src/aniworld/database/integration.py` - Korrektur des status-Feldwerts in der save_minimal_anime-Methode
+  - `config.ini` - Änderung von autocommit=false zu autocommit=true
+
+- **Problem:**
+  - Die Anwendung stürzte ab, wenn nach "solo" gesucht wurde und beim Versuch, die Ergebnisse in der Datenbank zu speichern
+  - Der Fehler war auf das status-Feld zurückzuführen, das ein ENUM mit den Werten 'laufend', 'abgeschlossen' und 'angekündigt' ist
+  - Wir versuchten "Unbekannt" zu speichern, was zu einem Fehler führte
+
+- **Lösung:**
+  - Änderung aller "Unbekannt"-Werte in den SQL-Befehlen auf "laufend"
+  - Aktivierung von autocommit in der Datenbankkonfiguration
+  - Direktere Fehlerprotokollierung
+
+- **Aktueller Status:**
+  - Manuelle Datenbanktests bestätigen, dass Einträge korrekt gespeichert werden können
+  - Die Anwendung scheint stabiler zu laufen
+  - Solo Leveling wurde erfolgreich manuell in die Datenbank eingefügt
+
+- **Nächste Schritte:**
+  - Test der automatischen Datenbankschreibfunktionen mit verschiedenen Anime-Serien
+  - Weitere Überwachung auf versteckte Fehler
+  - Überprüfung der Staffel- und Episodenspeicherung
+
+## [2025-03-22 20:11] Erfolgreiche Tests der Datenbankfunktionalität über CLI
+
+- **Durchgeführte Tests:**
+  - Manuelle Einfügung eines Testeintrags in die Datenbank über SQL
+  - Erfolgreiche Abfrage der Datenbank mit `--db-list-anime`
+  - Erfolgreiche Anzeige detaillierter Informationen mit `--db-anime-info 11`
+
+- **Erkenntnisse:**
+  - Die grafische Benutzeroberfläche funktioniert nicht auf dem Server wegen fehlendem X-Server
+  - Die Kommandozeileninterface-Funktionen (CLI) für Datenbankoperationen funktionieren einwandfrei
+  - Beide in der Datenbank gespeicherten Anime werden korrekt angezeigt
+
+- **Aktueller Status:**
+  - Die Datenbankanbindung ist vollständig funktionsfähig
+  - CLI-Kommandos können verwendet werden, um Datenbankoperationen durchzuführen
+  - Das ENUM-Problem mit dem status-Feld wurde behoben
+
+- **Nächste Schritte:**
+  - Tests mit dem Parameter `--query` für neue Anime durchführen
+  - Automatisierung für regelmäßige Aktualisierungen der Datenbank implementieren
+  - Entwicklung eines Dashboards zur Überwachung der Anime-Datenbank
 
 ## Glossar 

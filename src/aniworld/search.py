@@ -13,6 +13,7 @@ import traceback
 import curses
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
+from mysql.connector import MySQLConnection
 
 from aniworld.common import (
     clear_screen,
@@ -126,7 +127,7 @@ def fetch_by_link(link: str, not_found: str) -> str:
 
 
 def save_anime_data_from_html(
-    soup: BeautifulSoup, anime_link: str, session: Optional[Session] = None
+    soup: BeautifulSoup, anime_link: str, session: Optional[MySQLConnection] = None
 ) -> Union[AnimeSeries, None]:
     """
     Extracts anime data from the HTML content and saves it to the database.
@@ -139,14 +140,18 @@ def save_anime_data_from_html(
     Returns:
         AnimeSeries object if successful, None otherwise
     """
+    module_log.debug(f"Starte Extraktion und Speicherung für: {anime_link}")
+    
     should_close_session = False
     if session is None:
         from aniworld.database import SessionLocal
         try:
+            module_log.debug("Erstelle neue Datenbankverbindung")
             session = SessionLocal()
             should_close_session = True
         except Exception as e:
             module_log.error(f"Fehler beim Erstellen der Datenbankverbindung: {e}")
+            module_log.error(traceback.format_exc())
             return None
 
     try:
@@ -162,8 +167,9 @@ def save_anime_data_from_html(
         if anime_title_element:
             anime_title = anime_title_element.text.strip()
             anime_data["title"] = anime_title
+            module_log.debug(f"Extrahierter Titel: {anime_title}")
         else:
-            module_log.debug(f"Kein Anime-Titel gefunden in: {anime_link}")
+            module_log.error(f"Kein Anime-Titel gefunden in: {anime_link}")
             return None
 
         # Extract anime description
@@ -310,85 +316,60 @@ def save_anime_data_from_html(
             return None
 
         # Speichere die Daten in der Datenbank
+        cursor = None
         try:
-            # 1. Speichere oder aktualisiere den Anime
-            anime_repo = AnimeRepository(session)
-            anime = anime_repo.find_by_url(anime_link)
-
-            if anime is None:
-                anime = AnimeSeries(
-                    title=anime_data["title"],
-                    url=anime_link,
-                    description=anime_data["description"],
-                    cover_image=anime_data["cover_image"],
-                    genres=",".join(anime_data["genres"]) if anime_data["genres"] else None,
+            # Erstelle Cursor für Datenbankoperationen
+            cursor = session.cursor(dictionary=True)
+            
+            # Prüfe, ob der Anime bereits existiert
+            cursor.execute(
+                "SELECT * FROM anime_series WHERE aniworld_url = %s", 
+                (anime_link,)
+            )
+            existing_anime = cursor.fetchone()
+            
+            anime_id = None
+            
+            if existing_anime:
+                # Anime existiert bereits, aktualisiere ihn
+                anime_id = existing_anime['series_id']
+                module_log.debug(f"Aktualisiere existierenden Anime mit ID: {anime_id}")
+                
+                cursor.execute(
+                    "UPDATE anime_series SET titel = %s, aktualisiert_am = NOW() WHERE series_id = %s",
+                    (anime_data["title"], anime_id)
                 )
-                anime_repo.save(anime)
             else:
-                # Aktualisieren der bestehenden Anime-Daten
-                anime.title = anime_data["title"]
-                anime.description = anime_data["description"]
-                anime.cover_image = anime_data["cover_image"]
-                anime.genres = ",".join(anime_data["genres"]) if anime_data["genres"] else None
-                anime.updated_at = datetime.now()
-                anime_repo.update(anime)
-
-            # 2. Speichere oder aktualisiere die Staffeln
-            season_repo = SeasonRepository(session)
-            for season_data in anime_data["seasons"]:
-                season_id = season_data["season_id"]
-                season = season_repo.find_by_anime_and_season_id(anime.id, season_id)
-
-                if season is None:
-                    season = Season(
-                        anime_id=anime.id,
-                        season_id=season_id,
-                    )
-                    season_repo.save(season)
-
-                # 3. Speichere oder aktualisiere die Episoden
-                episode_repo = EpisodeRepository(session)
-                for episode_data in season_data["episodes"]:
-                    episode_id = episode_data["episode_id"]
-                    episode = episode_repo.find_by_season_and_episode_id(
-                        season.id, episode_id
-                    )
-
-                    if episode is None:
-                        episode = Episode(
-                            season_id=season.id,
-                            episode_id=episode_id,
-                            title=episode_data["title"],
-                            url=episode_data["url"],
-                        )
-                        episode_repo.save(episode)
-                    else:
-                        # Aktualisiere den Episodentitel, wenn ein besserer gefunden wurde
-                        if episode_data["title"] != f"Staffel {season_id} Episode {episode_id}":
-                            episode.title = episode_data["title"]
-                            episode.updated_at = datetime.now()
-                            episode_repo.update(episode)
-
-            # Explizites Commit, falls autocommit nicht funktioniert
-            if hasattr(session, 'commit'):
-                try:
-                    session.commit()
-                    module_log.debug(f"Änderungen für Anime '{anime.title}' erfolgreich committet")
-                except Exception as commit_error:
-                    module_log.error(f"Commit-Fehler: {commit_error}")
-                    if should_close_session:
-                        try:
-                            session.rollback()
-                        except:
-                            pass
-                    return None
-
+                # Neuer Anime, füge ihn hinzu
+                module_log.debug("Erstelle neuen Anime-Eintrag")
+                cursor.execute(
+                    """
+                    INSERT INTO anime_series 
+                    (titel, beschreibung, aniworld_url, cover_url, status) 
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (anime_data["title"], "", anime_link, "", "laufend")
+                )
+                anime_id = cursor.lastrowid
+                
+            # Commit nur wenn wir autocommit=False haben und nichts fehlgeschlagen ist
+            if not session.autocommit:
+                session.commit()
+                
+            module_log.info(f"Anime '{anime_data['title']}' in Datenbank gespeichert mit ID: {anime_id}")
+            
+            # Erstelle ein AnimeSeries-Objekt für die Rückgabe
+            anime = AnimeSeries()
+            anime.series_id = anime_id
+            anime.titel = anime_data["title"]
+            anime.aniworld_url = anime_link
+            
             return anime
 
         except Exception as e:
             module_log.error(f"Fehler beim Speichern der Anime-Daten: {e}")
-            traceback.print_exc()
-            if should_close_session:
+            module_log.error(traceback.format_exc())
+            if should_close_session and not session.autocommit:
                 try:
                     session.rollback()
                 except:
@@ -397,7 +378,10 @@ def save_anime_data_from_html(
     finally:
         if should_close_session and session:
             try:
+                if cursor:
+                    cursor.close()
                 session.close()
+                module_log.debug("Datenbankverbindung geschlossen")
             except:
                 pass
 
@@ -430,35 +414,45 @@ def search_by_query(query: str) -> str:
 
         # Hier speichern wir alle gefundenen Anime in der Datenbank, bevor wir fortfahren
         if HAS_DATABASE:
-            logging.info(f"Speichere {len(json_data)} gefundene Anime in die Datenbank...")
-            for anime_item in json_data:
-                try:
-                    # Anime-Link extrahieren und Details abrufen
-                    anime_link = anime_item.get('link')
-                    if anime_link:
-                        print(f"Original Link aus Suchergebnissen: '{anime_link}'")
-                        logging.debug(f"Hole Details für Anime: {anime_link}")
-                        # Vollständige URL erstellen, falls notwendig
-                        if not anime_link.startswith('http'):
-                            print(f"Link beginnt nicht mit http, füge Präfix hinzu")
-                            # Prüfen, ob der Link bereits mit / beginnt
-                            if not anime_link.startswith('/'):
-                                anime_link = f"/anime/stream/{anime_link}"
-                            anime_link = f"https://aniworld.to{anime_link}"
-                        
-                        print(f"Endgültiger Link für Abfrage: '{anime_link}'")
-                        
-                        # HTML-Inhalt der Anime-Detailseite abrufen
-                        response = fetch_url_content(anime_link)
-                        if response:
-                            html_content = response.decode()
-                            # HTML-Inhalt in BeautifulSoup-Objekt umwandeln
-                            soup = BeautifulSoup(html_content, 'html.parser')
-                            # Anime-Daten aus HTML extrahieren und in Datenbank speichern
-                            anime_id = save_anime_data_from_html(soup, anime_link)
-                            logging.info(f"Anime '{anime_item.get('name', 'Unbekannt')}' in Datenbank gespeichert mit ID: {anime_id}")
-                except Exception as e:
-                    logging.error(f"Fehler beim Speichern des Anime {anime_item.get('name', 'Unbekannt')}: {e}")
+            try:
+                logging.info(f"Speichere {len(json_data)} gefundene Anime in die Datenbank...")
+                for anime_item in json_data:
+                    try:
+                        # Anime-Link extrahieren und Details abrufen
+                        anime_link = anime_item.get('link')
+                        if anime_link:
+                            print(f"Original Link aus Suchergebnissen: '{anime_link}'")
+                            logging.debug(f"Hole Details für Anime: {anime_link}")
+                            # Vollständige URL erstellen, falls notwendig
+                            if not anime_link.startswith('http'):
+                                print(f"Link beginnt nicht mit http, füge Präfix hinzu")
+                                # Prüfen, ob der Link bereits mit / beginnt
+                                if not anime_link.startswith('/'):
+                                    anime_link = f"/anime/stream/{anime_link}"
+                                anime_link = f"https://aniworld.to{anime_link}"
+                            
+                            print(f"Endgültiger Link für Abfrage: '{anime_link}'")
+                            
+                            # HTML-Inhalt der Anime-Detailseite abrufen
+                            response = fetch_url_content(anime_link)
+                            if response:
+                                html_content = response.decode()
+                                # HTML-Inhalt in BeautifulSoup-Objekt umwandeln
+                                soup = BeautifulSoup(html_content, 'html.parser')
+                                # Anime-Daten aus HTML extrahieren und in Datenbank speichern
+                                anime_id = save_anime_data_from_html(soup, anime_link)
+                                logging.info(f"Anime '{anime_item.get('name', 'Unbekannt')}' in Datenbank gespeichert mit ID: {anime_id}")
+                    except Exception as e:
+                        logging.error(f"Fehler beim Speichern des Anime {anime_item.get('name', 'Unbekannt')}: {e}")
+                        print(f"Fehler beim Speichern von '{anime_item.get('name', 'Unbekannt')}': {e}")
+                        traceback.print_exc()
+            except Exception as e:
+                logging.error(f"Kritischer Fehler beim Datenbankvorgang: {e}")
+                print(f"Kritischer Fehler bei der Datenbankoperation: {e}")
+                traceback.print_exc()
+                # Wenn ein kritischer Fehler auftritt, deaktivieren wir temporär die Datenbankfunktionalität
+                logging.warning("Datenbankfunktionalität für diese Suche temporär deaktiviert")
+                print("Datenbankfunktionalität für diese Suche temporär deaktiviert")
 
         if len(json_data) == 1:
             logging.debug("Only one anime found: %s", json_data[0])
