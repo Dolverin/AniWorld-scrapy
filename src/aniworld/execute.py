@@ -420,7 +420,8 @@ def handle_watch_action(  # pylint: disable=too-many-arguments, too-many-positio
 def handle_download_action(params: Dict[str, Any]) -> None:
     logging.debug("Action is Download")
     check_dependencies(["yt-dlp"])
-    sanitize_anime_title = sanitize_path(params['anime_title'])
+
+    logging.debug("Params: %s", params)
 
     def get_language_from_key(key: int) -> str:
         key_mapping = {
@@ -436,17 +437,28 @@ def handle_download_action(params: Dict[str, Any]) -> None:
 
         return language
 
-    output_directory = os.getenv("OUTPUT_DIRECTORY") or params['output_directory']
-    seasons = params['season_number']
-    episodes = params['episode_number']
-    if seasons:
-        if seasons < 10:
-            seasons = "00" + str(seasons)
-        elif 10 <= seasons < 100:
-            seasons = "0" + str(seasons)
+    provider = params.get('provider', 'VOE')
+    link = params.get('link', '')
+    seasons = params.get('season_number', 0)
+    episodes = params.get('episode_number', 0)
+    language = params.get('language', 1)
+    sanitize_anime_title = sanitize_path(params.get('anime_title', 'Unknown'))
+    output_directory = params.get('output_directory', '')
+
+    if not output_directory:
+        output_directory = sanitize_path(
+            os.path.join(
+                params.get('output', ''),
+                sanitize_anime_title
+            )
+        )
+
+    os.makedirs(os.path.join(output_directory, sanitize_anime_title), exist_ok=True)
+
+    if seasons < 10:
+        seasons = "0" + str(seasons)
+
     if episodes < 10:
-        episodes = "00" + str(episodes)
-    elif 10 <= episodes < 100:
         episodes = "0" + str(episodes)
 
     file_name = (
@@ -461,6 +473,24 @@ def handle_download_action(params: Dict[str, Any]) -> None:
         f"{file_name} ({get_language_from_key(int(params['language']))}).mp4"
     )
 
+    # Speichere Download in der Datenbank über die Pipeline, wenn verfügbar
+    download_id = -1
+    try:
+        from aniworld.database.pipeline import get_pipeline
+        pipeline = get_pipeline()
+        download_data = {
+            'episode_url': params.get('episode_url', ''),
+            'provider': provider,
+            'sprache': get_language_from_key(int(language)),
+            'zieldatei': file_path
+        }
+        download_id = pipeline.record_download(download_data)
+        logging.info(f"Download in Datenbank aufgezeichnet mit ID: {download_id}")
+    except ImportError:
+        logging.debug("Datenbankmodul nicht verfügbar, Download wird nicht protokolliert")
+    except Exception as e:
+        logging.error(f"Fehler beim Aufzeichnen des Downloads: {e}")
+
     if not params['only_command']:
         msg = f"Downloading to '{file_path}'"
         if not platform.system() == "Windows":
@@ -469,11 +499,50 @@ def handle_download_action(params: Dict[str, Any]) -> None:
             print_progress_info(msg)
     command = build_yt_dlp_command(params['link'], file_path, params['provider'])
     logging.debug("Executing command: %s", command)
+    
+    # Führe den eigentlichen Download durch
     try:
         execute_command(command, params['only_command'])
+        
+        # Aktualisiere den Download-Status in der Datenbank, wenn verfügbar
+        if download_id > 0:
+            try:
+                from aniworld.database.pipeline import get_pipeline
+                pipeline = get_pipeline()
+                status_data = {
+                    'download_id': download_id,
+                    'status': 'abgeschlossen'
+                }
+                pipeline.update_download_status(download_id, 'abgeschlossen')
+                logging.info(f"Download-Status aktualisiert auf 'abgeschlossen' für ID: {download_id}")
+            except Exception as e:
+                logging.error(f"Fehler beim Aktualisieren des Download-Status: {e}")
     except KeyboardInterrupt:
         logging.debug("KeyboardInterrupt encountered, cleaning up leftovers")
         clean_up_leftovers(os.path.dirname(file_path))
+        
+        # Aktualisiere den Download-Status als abgebrochen, wenn möglich
+        if download_id > 0:
+            try:
+                from aniworld.database.pipeline import get_pipeline
+                pipeline = get_pipeline()
+                pipeline.update_download_status(download_id, 'abgebrochen')
+                logging.info(f"Download-Status aktualisiert auf 'abgebrochen' für ID: {download_id}")
+            except Exception as e:
+                logging.error(f"Fehler beim Aktualisieren des Download-Status: {e}")
+    except Exception as download_error:
+        logging.error(f"Download fehlgeschlagen: {download_error}")
+        
+        # Aktualisiere den Download-Status als fehlgeschlagen, wenn möglich
+        if download_id > 0:
+            try:
+                from aniworld.database.pipeline import get_pipeline
+                pipeline = get_pipeline()
+                pipeline.update_download_status(download_id, 'fehlgeschlagen')
+                logging.info(f"Download-Status aktualisiert auf 'fehlgeschlagen' für ID: {download_id}")
+            except Exception as e:
+                logging.error(f"Fehler beim Aktualisieren des Download-Status: {e}")
+                
     logging.debug("yt-dlp has finished.\nBye bye!")
     if not platform.system() == "Windows":
         print(f"Downloaded to '{file_path}'")
@@ -558,6 +627,24 @@ def process_episode(params: Dict[str, Any]) -> None:
 
         logging.debug("Language Code: %s", params['lang'])
         logging.debug("Available Providers: %s", data.keys())
+
+        # Speichere die Episodendaten in der Datenbank, wenn verfügbar
+        try:
+            from aniworld.database.pipeline import get_pipeline
+            pipeline = get_pipeline()
+            episode_data = {
+                'url': params['episode_url'],
+                'title': episode_title,
+                'anime_title': anime_title,
+                'anime_slug': params['anime_slug'],
+                'season_number': params.get('season_number'),
+                'episode_number': params.get('episode_number')
+            }
+            pipeline.process_episode(episode_data)
+        except ImportError:
+            logging.debug("Datenbankmodul nicht verfügbar, Episode wird nicht protokolliert")
+        except Exception as e:
+            logging.error(f"Fehler beim Speichern der Episodendaten: {e}")
 
         providers_to_try = [params['provider_selected']] + [
             p for p in params['provider_mapping'] if p != params['provider_selected']

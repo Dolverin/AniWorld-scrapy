@@ -2,8 +2,9 @@ import html
 import logging
 import os
 import webbrowser
+import re
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from json import loads
 from json.decoder import JSONDecodeError
 from urllib.parse import quote
@@ -18,6 +19,14 @@ from aniworld.common import (
     display_ascii_art,
     show_messagebox
 )
+
+# Datenbankintegration (optional für Systeme ohne Datenbank)
+HAS_DATABASE = False
+try:
+    from aniworld.database.pipeline import get_pipeline
+    HAS_DATABASE = True
+except ImportError:
+    logging.debug("Datenbankmodul nicht verfügbar, Speicherung wird deaktiviert")
 
 
 def search_anime(slug: str = None, link: str = None, query: str = None) -> str:
@@ -41,6 +50,16 @@ def fetch_by_slug(slug: str, not_found: str) -> str:
     response = fetch_url_content(url)
     if response and not_found not in response.decode():
         logging.debug("Found matching slug: %s", slug)
+        
+        # Speichere Daten in der Datenbank, wenn verfügbar
+        if HAS_DATABASE:
+            try:
+                # Extrahiere Anime-Daten aus der Antwort
+                html_content = response.decode()
+                save_anime_data_from_html(html_content, url, slug)
+            except Exception as e:
+                logging.error(f"Fehler beim Speichern der Anime-Daten in der Datenbank: {e}")
+        
         return slug
     return None
 
@@ -50,11 +69,126 @@ def fetch_by_link(link: str, not_found: str) -> str:
         logging.debug("Fetching using link: %s", link)
         response = fetch_url_content(link, check=False)
         if response and not_found not in response.decode():
-            logging.debug("Found matching slug: %s", link.split('/')[-1])
-            return link.split('/')[-1]
+            slug = link.split('/')[-1]
+            logging.debug("Found matching slug: %s", slug)
+            
+            # Speichere Daten in der Datenbank, wenn verfügbar
+            if HAS_DATABASE:
+                try:
+                    # Extrahiere Anime-Daten aus der Antwort
+                    html_content = response.decode()
+                    save_anime_data_from_html(html_content, link, slug)
+                except Exception as e:
+                    logging.error(f"Fehler beim Speichern der Anime-Daten in der Datenbank: {e}")
+            
+            return slug
     except ValueError:
         logging.debug("ValueError encountered while fetching link")
     return None
+
+
+def save_anime_data_from_html(html_content: str, url: str, slug: str) -> Optional[int]:
+    """
+    Extrahiert Anime-Daten aus HTML-Inhalt und speichert sie in der Datenbank.
+    
+    Args:
+        html_content: Der HTML-Inhalt der Anime-Seite
+        url: Die URL der Anime-Seite
+        slug: Der Slug des Anime
+        
+    Returns:
+        ID des gespeicherten Anime oder None bei Fehler
+    """
+    if not HAS_DATABASE:
+        return None
+        
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extrahiere Titel
+        title_elem = soup.find('h1', class_='series-title')
+        title = title_elem.text.strip() if title_elem else slug.replace('-', ' ').title()
+        
+        # Extrahiere Beschreibung
+        description_elem = soup.find('div', class_='series-description')
+        description = description_elem.text.strip() if description_elem else None
+        
+        # Extrahiere Cover-URL
+        cover_elem = soup.find('div', class_='series-cover')
+        cover_url = None
+        if cover_elem:
+            img = cover_elem.find('img')
+            if img and 'src' in img.attrs:
+                cover_url = img['src']
+                if not cover_url.startswith('http'):
+                    cover_url = f"https://aniworld.to{cover_url}"
+        
+        # Extrahiere zusätzliche Metadaten
+        meta_data = {}
+        info_box = soup.find('div', class_='series-infos')
+        if info_box:
+            for div in info_box.find_all('div', class_='series-info'):
+                label = div.find('div', class_='series-info-header')
+                value = div.find('div', class_='series-info-content')
+                if label and value:
+                    key = label.text.strip().lower().replace(':', '').replace(' ', '_')
+                    meta_data[key] = value.text.strip()
+        
+        # Stelle Anime-Daten zusammen
+        anime_data = {
+            'title': title,
+            'description': description,
+            'url': url,
+            'cover_url': cover_url,
+            'status': meta_data.get('status'),
+            'year': meta_data.get('erscheinungsjahr'),
+            'studio': meta_data.get('studio'),
+            'original_title': meta_data.get('originaltitel')
+        }
+        
+        # Extrahiere Staffeln und Episoden, wenn vorhanden
+        seasons_container = soup.find('div', class_='seasons-wrapper')
+        if seasons_container:
+            seasons = []
+            for season_elem in seasons_container.find_all('div', class_='season'):
+                season_title_elem = season_elem.find('h3')
+                season_title = season_title_elem.text.strip() if season_title_elem else None
+                season_number_match = re.search(r'Staffel (\d+)', season_title) if season_title else None
+                season_number = int(season_number_match.group(1)) if season_number_match else 0
+                
+                season_data = {
+                    'number': season_number,
+                    'title': season_title,
+                    'episodes': []
+                }
+                
+                episode_list = season_elem.find('div', class_='episodes')
+                if episode_list:
+                    for episode_elem in episode_list.find_all('a'):
+                        episode_url = episode_elem.get('href')
+                        if episode_url and not episode_url.startswith('http'):
+                            episode_url = f"https://aniworld.to{episode_url}"
+                            
+                        episode_title = episode_elem.text.strip() if episode_elem else None
+                        episode_number_match = re.search(r'Episode (\d+)', episode_title) if episode_title else None
+                        episode_number = int(episode_number_match.group(1)) if episode_number_match else 0
+                        
+                        season_data['episodes'].append({
+                            'number': episode_number,
+                            'title': episode_title,
+                            'url': episode_url
+                        })
+                
+                seasons.append(season_data)
+            
+            anime_data['seasons'] = seasons
+        
+        # Speichere in der Datenbank
+        pipeline = get_pipeline()
+        return pipeline.process_anime(anime_data)
+    except Exception as e:
+        logging.error(f"Fehler beim Extrahieren von Anime-Daten: {e}")
+        return None
 
 
 def search_by_query(query: str) -> str:

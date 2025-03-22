@@ -104,6 +104,33 @@
   - Implementierung von Cache-Mechanismen, um Duplikate zu vermeiden
   - Dokumentation der neuen Funktionen aktualisieren
 
+## [2024-05-08 16:40] Integration der Datenbank in Scraping-Pipeline
+
+- **Erstellte/Geänderte Dateien**:
+  - `src/aniworld/database/pipeline.py` - Neue Pipeline-Klasse für die Datenbankintegration
+  - `src/aniworld/database/__init__.py` - Aktualisiert, um die Pipeline zu exportieren
+  - `src/aniworld/search.py` - Modifiziert, um gescrapte Daten in der Datenbank zu speichern
+  - `src/aniworld/execute.py` - Modifiziert, um Download-Protokollierung über die Pipeline zu handhaben
+
+- **Zusammenfassung der Änderungen**:
+  - Eine neue Datenbank-Pipeline wurde implementiert, die Anime-Daten während des Scrapings speichert
+  - Die Suchfunktionen wurden erweitert, um HTML-Inhalte zu parsen und Anime-Metadaten zu extrahieren
+  - Ein Caching-Mechanismus wurde implementiert, um Datenbank-Anfragen zu optimieren
+  - Die Download-Protokollierung wurde überarbeitet, um die Pipeline zu nutzen
+  - Fehlerbehandlung und Statusaktualisierungen für Downloads wurden verbessert
+
+- **Aktueller Status**:
+  - Die Datenbank wird jetzt automatisch mit Anime-Daten gefüllt, wenn Benutzer nach Anime suchen
+  - Episoden und Downloads werden automatisch in der Datenbank protokolliert
+  - Die Statusaktualisierung von Downloads wird zuverlässig verfolgt (gestartet, abgeschlossen, fehlgeschlagen)
+  - Die Integration arbeitet im Hintergrund und erfordert keine Benutzerinteraktion
+
+- **Nächste Schritte**:
+  - Testen der Pipeline mit größeren Datenmengen
+  - Verbesserung des HTML-Parsings für verschiedene Seitenstrukturen
+  - Optimierung der Datenbankabfragen für bessere Performance
+  - Erweitern der CLI-Befehle um weitere administrative Funktionen
+
 ## Glossar
 
 ## Meilensteine 
