@@ -40,11 +40,23 @@ class DatabaseIntegration:
         """
         self.logger.info(f"Speichere Anime-Daten: {anime_data.get('title', 'Unbekannt')}")
         try:
+            # Debug-Logging für Staffeln und Episoden
+            if 'seasons' in anime_data:
+                self.logger.debug(f"Gefundene Staffeln: {len(anime_data['seasons'])}")
+                for season in anime_data['seasons']:
+                    self.logger.debug(f"Staffel {season.get('number')}: {season.get('title')}")
+                    if 'episodes' in season:
+                        self.logger.debug(f"  Gefundene Episoden: {len(season['episodes'])}")
+            else:
+                self.logger.warning("Keine Staffeldaten im anime_data Dictionary gefunden!")
+                
             anime_id = self.anime_service.save_from_scraper_data(anime_data)
             self.logger.debug(f"Anime erfolgreich gespeichert mit ID: {anime_id}")
             return anime_id
         except Exception as e:
             self.logger.error(f"Fehler beim Speichern der Anime-Daten: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             raise
             
     def get_anime_by_url(self, url: str) -> Optional[AnimeSeries]:

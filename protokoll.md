@@ -180,6 +180,30 @@
   - Optimierung der Datenbankabfragen für bessere Performance
   - Implementierung einer asynchronen Datenbankspeicherung im Hintergrund
 
+## [2024-07-25 16:45] Verbesserung der Staffel- und Episodenspeicherung
+
+- **Geänderte Dateien**:
+  - `src/aniworld/database/pipeline.py` - Hinzufügung von Debug-Logging für Staffeln und Episoden
+  - `src/aniworld/database/integration.py` - Verbesserung der Fehlerbehandlung und Debug-Logging
+  - `src/aniworld/database/services.py` - Erweiterung der Logging-Informationen für Staffel- und Episodenspeicherung
+
+- **Zusammenfassung der Änderungen**:
+  - Ausführliche Debug-Protokollierung wurde hinzugefügt, um den gesamten Datenfluss der Staffel- und Episodendaten zu verfolgen
+  - Verbesserte Fehlerbehandlung mit detaillierten Stacktraces ermöglicht eine bessere Diagnose von Problemen
+  - Die Datenweiterleitung beim Speichern von Staffeln und Episoden wurde überprüft und optimiert
+  - Besondere Aufmerksamkeit wurde der korrekten Extraktion und Verarbeitung von Staffel- und Episodennummern gewidmet
+
+- **Aktueller Status**:
+  - Das System kann nun vollständige Anime-Daten einschließlich Staffeln und Episoden in der Datenbank speichern
+  - Die Debug-Ausgaben helfen bei der Diagnose eventueller weiterer Probleme
+  - Die verbesserte Fehlerbehandlung macht das System robuster gegenüber unvollständigen oder fehlerhaften Daten
+
+- **Nächste Schritte**:
+  - Testen der Staffel- und Episodenspeicherung mit verschiedenen Anime-Serien
+  - Optimierung der Datenbankabfragen zur Vermeidung von Duplikaten
+  - Entfernen der debug-Logging-Ausgaben nach erfolgreicher Bestätigung der Funktionalität
+  - Implementierung einer Queue für die asynchrone Verarbeitung von langen Anime-Listen
+
 ## Glossar
 
 ## Meilensteine 

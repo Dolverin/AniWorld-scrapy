@@ -202,6 +202,8 @@ class AnimeService:
         Returns:
             ID der gespeicherten Anime-Serie
         """
+        logging.debug(f"AnimeService: Speichere Scraper-Daten für Anime '{anime_data.get('title', 'Unbekannt')}'")
+        
         # Erstelle oder aktualisiere Anime-Serie
         anime = self.get_or_create_anime(
             aniworld_url=anime_data.get('url', ''),
@@ -219,6 +221,7 @@ class AnimeService:
         
         # Speichere aktualisierte Anime-Daten
         self.anime_repo.save(anime)
+        logging.debug(f"AnimeService: Anime-Grunddaten gespeichert für ID {anime.series_id}")
         
         # Speichere Cover-Bild, wenn URL vorhanden und noch nicht gespeichert
         if anime.cover_url and not anime.cover_data:
@@ -232,8 +235,11 @@ class AnimeService:
         
         # Verarbeite Staffel- und Episodeninformationen, wenn vorhanden
         if 'seasons' in anime_data:
+            logging.debug(f"AnimeService: Verarbeite {len(anime_data['seasons'])} Staffeln")
             for season_data in anime_data['seasons']:
                 season_num = season_data.get('number', 0)
+                logging.debug(f"AnimeService: Verarbeite Staffel {season_num}")
+                
                 if season_num > 0:
                     season = self.get_or_create_season(
                         series_id=anime.series_id,
@@ -247,12 +253,17 @@ class AnimeService:
                     season.erscheinungsjahr = season_data.get('year', season.erscheinungsjahr)
                     season.anzahl_episoden = season_data.get('episode_count', season.anzahl_episoden)
                     self.season_repo.save(season)
+                    logging.debug(f"AnimeService: Staffel {season_num} gespeichert mit ID {season.season_id}")
                     
                     # Verarbeite Episoden
                     if 'episodes' in season_data:
+                        episode_count = len(season_data['episodes'])
+                        logging.debug(f"AnimeService: Verarbeite {episode_count} Episoden für Staffel {season_num}")
+                        
                         for episode_data in season_data['episodes']:
                             episode_num = episode_data.get('number', 0)
                             if episode_num > 0:
+                                logging.debug(f"AnimeService: Verarbeite Episode {episode_num}")
                                 episode = self.get_or_create_episode(
                                     season_id=season.season_id,
                                     episode_nummer=episode_num,
@@ -265,6 +276,11 @@ class AnimeService:
                                 episode.laufzeit = episode_data.get('duration', episode.laufzeit)
                                 episode.luftdatum = episode_data.get('air_date', episode.luftdatum)
                                 self.episode_repo.save(episode)
+                                logging.debug(f"AnimeService: Episode {episode_num} gespeichert mit ID {episode.episode_id}")
+                else:
+                    logging.warning(f"AnimeService: Ungültige Staffelnummer: {season_num}")
+        else:
+            logging.warning("AnimeService: Keine Staffeldaten im anime_data Dictionary gefunden!")
         
         return anime.series_id
 

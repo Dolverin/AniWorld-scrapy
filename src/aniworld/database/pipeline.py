@@ -21,12 +21,22 @@ class DatabasePipeline:
         Initialisiert die Pipeline mit einer Datenbankverbindung.
         """
         self.logger = logging.getLogger('aniworld.db.pipeline')
+        self.logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        
         try:
+            self.logger.debug("Initialisiere Datenbankverbindung...")
             self.db = DatabaseIntegration()
             self.logger.info("Datenbankpipeline initialisiert")
             self._cache = {}  # Cache für bereits verarbeitete URLs
         except Exception as e:
             self.logger.error(f"Fehler beim Initialisieren der Datenbankpipeline: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             self.db = None
     
     def process_anime(self, anime_data: Dict[str, Any]) -> Optional[int]:
@@ -47,6 +57,16 @@ class DatabasePipeline:
         if not url:
             self.logger.warning("Keine URL in den Anime-Daten gefunden")
             return None
+        
+        # Debug: Überprüfen ob Staffeln vorhanden sind
+        seasons = anime_data.get('seasons', [])
+        self.logger.debug(f"Anzahl Staffeln in den Daten: {len(seasons)}")
+        for i, season in enumerate(seasons):
+            self.logger.debug(f"Staffel {i+1}: {season.get('title')} (Nummer: {season.get('number')})")
+            episodes = season.get('episodes', [])
+            self.logger.debug(f"  Anzahl Episoden: {len(episodes)}")
+            if episodes:
+                self.logger.debug(f"  Erste Episode: {episodes[0].get('title')} (Nummer: {episodes[0].get('number')})")
             
         # Prüfen, ob der Anime bereits im Cache ist
         if url in self._cache:
@@ -70,6 +90,8 @@ class DatabasePipeline:
                 return None
         except Exception as e:
             self.logger.error(f"Fehler beim Verarbeiten der Anime-Daten: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return None
     
     def process_episode(self, episode_data: Dict[str, Any]) -> Optional[int]:
