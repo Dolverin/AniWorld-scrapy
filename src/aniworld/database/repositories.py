@@ -66,131 +66,147 @@ class BaseRepository:
 class AnimeRepository(BaseRepository):
     """Repository für Anime-Serien"""
     
+    def __init__(self):
+        super().__init__()
+        self.logger = logging.getLogger('aniworld.db.repo.anime')
+    
     def save(self, anime: AnimeSeries) -> int:
         """
-        Speichert eine Anime-Serie in der Datenbank
-        Führt ein Update durch, wenn series_id vorhanden ist, sonst ein Insert
+        Speichert oder aktualisiert eine Anime-Serie
         
         Args:
-            anime: Die zu speichernde Anime-Serie
+            anime: Das zu speichernde AnimeSeries-Objekt
             
         Returns:
-            Die ID der gespeicherten Anime-Serie
+            ID der gespeicherten/aktualisierten Anime-Serie
         """
-        if anime.series_id:
-            # Update bestehenden Anime
+        if anime.series_id is None or anime.series_id <= 0:
+            # Neuer Anime - Insert
             query = """
-            UPDATE anime_series 
-            SET titel = %s, original_titel = %s, beschreibung = %s, 
-                cover_url = %s, erscheinungsjahr = %s, status = %s,
-                studio = %s, regisseur = %s, zielgruppe = %s, fsk = %s,
-                bewertung = %s, aniworld_url = %s
-            WHERE series_id = %s
+                INSERT INTO anime_series 
+                (titel, original_titel, beschreibung, erscheinungsjahr, status, 
+                studio, regisseur, aniworld_url, cover_url, cover_data, letzte_aktualisierung)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """
-            self._execute_update(query, (
-                anime.titel, anime.original_titel, anime.beschreibung,
-                anime.cover_url, anime.erscheinungsjahr, anime.status,
-                anime.studio, anime.regisseur, anime.zielgruppe, anime.fsk,
-                anime.bewertung, anime.aniworld_url, anime.series_id
-            ))
-            return anime.series_id
+            params = (
+                anime.titel, 
+                anime.original_titel, 
+                anime.beschreibung, 
+                anime.erscheinungsjahr,
+                anime.status,
+                anime.studio,
+                anime.regisseur,
+                anime.aniworld_url,
+                anime.cover_url,
+                anime.cover_data
+            )
+            
+            anime.series_id = self._execute_update(query, params)
+            self.logger.info(f"Neue Anime-Serie angelegt: {anime.titel} (ID: {anime.series_id})")
         else:
-            # Füge neuen Anime hinzu
+            # Bestehender Anime - Update
             query = """
-            INSERT INTO anime_series 
-            (titel, original_titel, beschreibung, cover_url, 
-             erscheinungsjahr, status, studio, regisseur, 
-             zielgruppe, fsk, bewertung, aniworld_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                UPDATE anime_series 
+                SET titel = %s, 
+                    original_titel = %s, 
+                    beschreibung = %s, 
+                    erscheinungsjahr = %s, 
+                    status = %s, 
+                    studio = %s, 
+                    regisseur = %s, 
+                    aniworld_url = %s, 
+                    cover_url = %s,
+                    letzte_aktualisierung = NOW()
+                WHERE series_id = %s
             """
-            return self._execute_update(query, (
-                anime.titel, anime.original_titel, anime.beschreibung,
-                anime.cover_url, anime.erscheinungsjahr, anime.status,
-                anime.studio, anime.regisseur, anime.zielgruppe, anime.fsk,
-                anime.bewertung, anime.aniworld_url
-            ))
-    
-    def save_cover_data(self, series_id: int, cover_data: bytes) -> bool:
-        """
-        Speichert die Cover-Bilddaten für eine Anime-Serie
-        
-        Args:
-            series_id: ID der Anime-Serie
-            cover_data: Binärdaten des Cover-Bilds
+            params = (
+                anime.titel, 
+                anime.original_titel, 
+                anime.beschreibung, 
+                anime.erscheinungsjahr,
+                anime.status,
+                anime.studio,
+                anime.regisseur,
+                anime.aniworld_url,
+                anime.cover_url,
+                anime.series_id
+            )
             
-        Returns:
-            True, wenn erfolgreich, sonst False
-        """
-        query = "UPDATE anime_series SET cover_data = %s WHERE series_id = %s"
-        affected = self._execute_update(query, (cover_data, series_id))
-        return affected > 0
+            self._execute_update(query, params)
+            self.logger.debug(f"Anime-Serie aktualisiert: {anime.titel} (ID: {anime.series_id})")
+        
+        return anime.series_id
     
     def find_by_id(self, series_id: int) -> Optional[AnimeSeries]:
         """
-        Sucht eine Anime-Serie anhand ihrer ID
+        Findet einen Anime anhand seiner ID
         
         Args:
-            series_id: ID der Anime-Serie
+            series_id: ID des zu findenden Anime
             
         Returns:
-            AnimeSeries-Objekt oder None, wenn nicht gefunden
+            Das AnimeSeries-Objekt oder None, wenn nicht gefunden
         """
-        query = "SELECT * FROM anime_series WHERE series_id = %s"
-        result = self._execute_query(query, (series_id,), fetch_one=True)
+        query = """
+            SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
+                   status, studio, regisseur, aniworld_url, cover_url, 
+                   letzte_aktualisierung
+            FROM anime_series
+            WHERE series_id = %s
+        """
         
-        if result:
+        row = self._execute_query(query, (series_id,), fetch_one=True)
+        if row:
             return AnimeSeries(
-                series_id=result['series_id'],
-                titel=result['titel'],
-                original_titel=result['original_titel'],
-                beschreibung=result['beschreibung'],
-                cover_url=result['cover_url'],
-                cover_data=result['cover_data'],
-                erscheinungsjahr=result['erscheinungsjahr'],
-                status=result['status'],
-                studio=result['studio'],
-                regisseur=result['regisseur'],
-                zielgruppe=result['zielgruppe'],
-                fsk=result['fsk'],
-                bewertung=result['bewertung'],
-                aniworld_url=result['aniworld_url'],
-                erstellt_am=result['erstellt_am'],
-                aktualisiert_am=result['aktualisiert_am']
+                series_id=row['series_id'],
+                titel=row['titel'],
+                original_titel=row['original_titel'],
+                beschreibung=row['beschreibung'],
+                erscheinungsjahr=row['erscheinungsjahr'],
+                status=row['status'],
+                studio=row['studio'],
+                regisseur=row['regisseur'],
+                aniworld_url=row['aniworld_url'],
+                cover_url=row['cover_url'],
+                letzte_aktualisierung=row['letzte_aktualisierung']
             )
+        
         return None
     
-    def find_by_url(self, aniworld_url: str) -> Optional[AnimeSeries]:
+    def find_by_url(self, url: str) -> Optional[AnimeSeries]:
         """
-        Sucht eine Anime-Serie anhand ihrer AniWorld-URL
+        Findet einen Anime anhand seiner Aniworld-URL
         
         Args:
-            aniworld_url: AniWorld-URL der Serie
+            url: Die Aniworld-URL des zu findenden Anime
             
         Returns:
-            AnimeSeries-Objekt oder None, wenn nicht gefunden
+            Das AnimeSeries-Objekt oder None, wenn nicht gefunden
         """
-        query = "SELECT * FROM anime_series WHERE aniworld_url = %s"
-        result = self._execute_query(query, (aniworld_url,), fetch_one=True)
+        query = """
+            SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
+                   status, studio, regisseur, aniworld_url, cover_url, 
+                   letzte_aktualisierung
+            FROM anime_series
+            WHERE aniworld_url = %s
+        """
         
-        if result:
+        row = self._execute_query(query, (url,), fetch_one=True)
+        if row:
             return AnimeSeries(
-                series_id=result['series_id'],
-                titel=result['titel'],
-                original_titel=result['original_titel'],
-                beschreibung=result['beschreibung'],
-                cover_url=result['cover_url'],
-                cover_data=result['cover_data'],
-                erscheinungsjahr=result['erscheinungsjahr'],
-                status=result['status'],
-                studio=result['studio'],
-                regisseur=result['regisseur'],
-                zielgruppe=result['zielgruppe'],
-                fsk=result['fsk'],
-                bewertung=result['bewertung'],
-                aniworld_url=result['aniworld_url'],
-                erstellt_am=result['erstellt_am'],
-                aktualisiert_am=result['aktualisiert_am']
+                series_id=row['series_id'],
+                titel=row['titel'],
+                original_titel=row['original_titel'],
+                beschreibung=row['beschreibung'],
+                erscheinungsjahr=row['erscheinungsjahr'],
+                status=row['status'],
+                studio=row['studio'],
+                regisseur=row['regisseur'],
+                aniworld_url=row['aniworld_url'],
+                cover_url=row['cover_url'],
+                letzte_aktualisierung=row['letzte_aktualisierung']
             )
+        
         return None
     
     def find_all(self) -> List[AnimeSeries]:
@@ -198,46 +214,67 @@ class AnimeRepository(BaseRepository):
         Gibt alle Anime-Serien zurück
         
         Returns:
-            Liste von AnimeSeries-Objekten
+            Liste aller Anime-Serien in der Datenbank
         """
-        query = "SELECT * FROM anime_series ORDER BY titel"
-        results = self._execute_query(query)
+        query = """
+            SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
+                   status, studio, regisseur, aniworld_url, cover_url, 
+                   letzte_aktualisierung
+            FROM anime_series
+            ORDER BY titel
+        """
         
-        anime_list = []
-        for result in results:
-            anime_list.append(AnimeSeries(
-                series_id=result['series_id'],
-                titel=result['titel'],
-                original_titel=result['original_titel'],
-                beschreibung=result['beschreibung'],
-                cover_url=result['cover_url'],
-                cover_data=result['cover_data'],
-                erscheinungsjahr=result['erscheinungsjahr'],
-                status=result['status'],
-                studio=result['studio'],
-                regisseur=result['regisseur'],
-                zielgruppe=result['zielgruppe'],
-                fsk=result['fsk'],
-                bewertung=result['bewertung'],
-                aniworld_url=result['aniworld_url'],
-                erstellt_am=result['erstellt_am'],
-                aktualisiert_am=result['aktualisiert_am']
+        results = self._execute_query(query)
+        animes = []
+        
+        for row in results:
+            animes.append(AnimeSeries(
+                series_id=row['series_id'],
+                titel=row['titel'],
+                original_titel=row['original_titel'],
+                beschreibung=row['beschreibung'],
+                erscheinungsjahr=row['erscheinungsjahr'],
+                status=row['status'],
+                studio=row['studio'],
+                regisseur=row['regisseur'],
+                aniworld_url=row['aniworld_url'],
+                cover_url=row['cover_url'],
+                letzte_aktualisierung=row['letzte_aktualisierung']
             ))
-        return anime_list
+        
+        return animes
+    
+    def save_cover_data(self, series_id: int, cover_data: bytes) -> bool:
+        """
+        Speichert das Cover-Bild eines Anime
+        
+        Args:
+            series_id: ID des Anime
+            cover_data: Binärdaten des Cover-Bildes
+            
+        Returns:
+            True, wenn erfolgreich gespeichert
+        """
+        query = """
+            UPDATE anime_series 
+            SET cover_data = %s
+            WHERE series_id = %s
+        """
+        
+        return self._execute_update(query, (cover_data, series_id)) > 0
     
     def delete(self, series_id: int) -> bool:
         """
-        Löscht eine Anime-Serie anhand ihrer ID
+        Löscht einen Anime aus der Datenbank
         
         Args:
-            series_id: ID der Anime-Serie
+            series_id: ID des zu löschenden Anime
             
         Returns:
-            True, wenn erfolgreich, sonst False
+            True, wenn erfolgreich gelöscht
         """
         query = "DELETE FROM anime_series WHERE series_id = %s"
-        affected = self._execute_update(query, (series_id,))
-        return affected > 0
+        return self._execute_update(query, (series_id,)) > 0
 
 
 class SeasonRepository(BaseRepository):
@@ -366,124 +403,179 @@ class SeasonRepository(BaseRepository):
 class EpisodeRepository(BaseRepository):
     """Repository für Episoden"""
     
+    def __init__(self):
+        super().__init__()
+        self.logger = logging.getLogger('aniworld.db.repo.episode')
+    
     def save(self, episode: Episode) -> int:
         """
-        Speichert eine Episode in der Datenbank
-        Führt ein Update durch, wenn episode_id vorhanden ist, sonst ein Insert
+        Speichert oder aktualisiert eine Episode
         
         Args:
-            episode: Die zu speichernde Episode
+            episode: Das zu speichernde Episode-Objekt
             
         Returns:
-            Die ID der gespeicherten Episode
+            ID der gespeicherten/aktualisierten Episode
         """
-        if episode.episode_id:
-            # Update bestehende Episode
+        if episode.episode_id is None or episode.episode_id <= 0:
+            # Neue Episode - Insert
             query = """
-            UPDATE episodes 
-            SET season_id = %s, episode_nummer = %s, titel = %s, 
-                beschreibung = %s, laufzeit = %s, luftdatum = %s, 
-                aniworld_url = %s
-            WHERE episode_id = %s
+                INSERT INTO episoden 
+                (season_id, episode_nummer, titel, beschreibung, laufzeit, luftdatum, aniworld_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            self._execute_update(query, (
-                episode.season_id, episode.episode_nummer, episode.titel,
-                episode.beschreibung, episode.laufzeit, episode.luftdatum,
-                episode.aniworld_url, episode.episode_id
-            ))
-            return episode.episode_id
-        else:
-            # Füge neue Episode hinzu
-            query = """
-            INSERT INTO episodes 
-            (season_id, episode_nummer, titel, beschreibung, 
-             laufzeit, luftdatum, aniworld_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            return self._execute_update(query, (
-                episode.season_id, episode.episode_nummer, episode.titel,
-                episode.beschreibung, episode.laufzeit, episode.luftdatum,
+            params = (
+                episode.season_id, 
+                episode.episode_nummer, 
+                episode.titel, 
+                episode.beschreibung, 
+                episode.laufzeit,
+                episode.luftdatum,
                 episode.aniworld_url
-            ))
+            )
+            
+            episode.episode_id = self._execute_update(query, params)
+            self.logger.info(f"Neue Episode angelegt: {episode.titel} (ID: {episode.episode_id})")
+        else:
+            # Bestehende Episode - Update
+            query = """
+                UPDATE episoden 
+                SET season_id = %s, 
+                    episode_nummer = %s, 
+                    titel = %s, 
+                    beschreibung = %s, 
+                    laufzeit = %s, 
+                    luftdatum = %s, 
+                    aniworld_url = %s
+                WHERE episode_id = %s
+            """
+            params = (
+                episode.season_id, 
+                episode.episode_nummer, 
+                episode.titel, 
+                episode.beschreibung, 
+                episode.laufzeit,
+                episode.luftdatum,
+                episode.aniworld_url,
+                episode.episode_id
+            )
+            
+            self._execute_update(query, params)
+            self.logger.debug(f"Episode aktualisiert: {episode.titel} (ID: {episode.episode_id})")
+        
+        return episode.episode_id
     
     def find_by_id(self, episode_id: int) -> Optional[Episode]:
         """
-        Sucht eine Episode anhand ihrer ID
+        Findet eine Episode anhand ihrer ID
         
         Args:
-            episode_id: ID der Episode
+            episode_id: ID der zu findenden Episode
             
         Returns:
-            Episode-Objekt oder None, wenn nicht gefunden
+            Das Episode-Objekt oder None, wenn nicht gefunden
         """
-        query = "SELECT * FROM episodes WHERE episode_id = %s"
-        result = self._execute_query(query, (episode_id,), fetch_one=True)
+        query = """
+            SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
+                   laufzeit, luftdatum, aniworld_url
+            FROM episoden
+            WHERE episode_id = %s
+        """
         
-        if result:
+        row = self._execute_query(query, (episode_id,), fetch_one=True)
+        if row:
             return Episode(
-                episode_id=result['episode_id'],
-                season_id=result['season_id'],
-                episode_nummer=result['episode_nummer'],
-                titel=result['titel'],
-                beschreibung=result['beschreibung'],
-                laufzeit=result['laufzeit'],
-                luftdatum=result['luftdatum'],
-                aniworld_url=result['aniworld_url']
+                episode_id=row['episode_id'],
+                season_id=row['season_id'],
+                episode_nummer=row['episode_nummer'],
+                titel=row['titel'],
+                beschreibung=row['beschreibung'],
+                laufzeit=row['laufzeit'],
+                luftdatum=row['luftdatum'],
+                aniworld_url=row['aniworld_url']
             )
+        
+        return None
+    
+    def find_by_url(self, url: str) -> Optional[Episode]:
+        """
+        Findet eine Episode anhand ihrer Aniworld-URL
+        
+        Args:
+            url: Die Aniworld-URL der zu findenden Episode
+            
+        Returns:
+            Das Episode-Objekt oder None, wenn nicht gefunden
+        """
+        query = """
+            SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
+                   laufzeit, luftdatum, aniworld_url
+            FROM episoden
+            WHERE aniworld_url = %s
+        """
+        
+        row = self._execute_query(query, (url,), fetch_one=True)
+        if row:
+            return Episode(
+                episode_id=row['episode_id'],
+                season_id=row['season_id'],
+                episode_nummer=row['episode_nummer'],
+                titel=row['titel'],
+                beschreibung=row['beschreibung'],
+                laufzeit=row['laufzeit'],
+                luftdatum=row['luftdatum'],
+                aniworld_url=row['aniworld_url']
+            )
+        
         return None
     
     def find_by_season_id(self, season_id: int) -> List[Episode]:
         """
-        Sucht alle Episoden zu einer Staffel
+        Findet alle Episoden einer Staffel
         
         Args:
             season_id: ID der Staffel
             
         Returns:
-            Liste von Episode-Objekten
+            Liste der Episoden der Staffel
         """
-        query = "SELECT * FROM episodes WHERE season_id = %s ORDER BY episode_nummer"
-        results = self._execute_query(query, (season_id,))
+        query = """
+            SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
+                   laufzeit, luftdatum, aniworld_url
+            FROM episoden
+            WHERE season_id = %s
+            ORDER BY episode_nummer
+        """
         
-        episode_list = []
-        for result in results:
-            episode_list.append(Episode(
-                episode_id=result['episode_id'],
-                season_id=result['season_id'],
-                episode_nummer=result['episode_nummer'],
-                titel=result['titel'],
-                beschreibung=result['beschreibung'],
-                laufzeit=result['laufzeit'],
-                luftdatum=result['luftdatum'],
-                aniworld_url=result['aniworld_url']
+        results = self._execute_query(query, (season_id,))
+        episodes = []
+        
+        for row in results:
+            episodes.append(Episode(
+                episode_id=row['episode_id'],
+                season_id=row['season_id'],
+                episode_nummer=row['episode_nummer'],
+                titel=row['titel'],
+                beschreibung=row['beschreibung'],
+                laufzeit=row['laufzeit'],
+                luftdatum=row['luftdatum'],
+                aniworld_url=row['aniworld_url']
             ))
-        return episode_list
+        
+        return episodes
     
-    def find_by_url(self, aniworld_url: str) -> Optional[Episode]:
+    def delete(self, episode_id: int) -> bool:
         """
-        Sucht eine Episode anhand ihrer AniWorld-URL
+        Löscht eine Episode aus der Datenbank
         
         Args:
-            aniworld_url: AniWorld-URL der Episode
+            episode_id: ID der zu löschenden Episode
             
         Returns:
-            Episode-Objekt oder None, wenn nicht gefunden
+            True, wenn erfolgreich gelöscht
         """
-        query = "SELECT * FROM episodes WHERE aniworld_url = %s"
-        result = self._execute_query(query, (aniworld_url,), fetch_one=True)
-        
-        if result:
-            return Episode(
-                episode_id=result['episode_id'],
-                season_id=result['season_id'],
-                episode_nummer=result['episode_nummer'],
-                titel=result['titel'],
-                beschreibung=result['beschreibung'],
-                laufzeit=result['laufzeit'],
-                luftdatum=result['luftdatum'],
-                aniworld_url=result['aniworld_url']
-            )
-        return None
+        query = "DELETE FROM episoden WHERE episode_id = %s"
+        return self._execute_update(query, (episode_id,)) > 0
 
 
 class DownloadRepository(BaseRepository):

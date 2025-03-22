@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple, List
 
 from src.aniworld.database.services import AnimeService, DownloadService
+from src.aniworld.database.models import AnimeSeries, Episode
 
 
 class DatabaseIntegration:
@@ -45,117 +46,122 @@ class DatabaseIntegration:
         except Exception as e:
             self.logger.error(f"Fehler beim Speichern der Anime-Daten: {e}")
             raise
-    
-    def get_episode_data(self, episode_url: str) -> Optional[Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]]:
+            
+    def get_anime_by_url(self, url: str) -> Optional[AnimeSeries]:
         """
-        Ruft die Daten für eine Episode aus der Datenbank ab.
+        Ruft einen Anime anhand seiner Aniworld-URL ab.
         
         Args:
-            episode_url: Die URL der Episode auf AniWorld
+            url: Die Aniworld-URL des Anime
+            
+        Returns:
+            Das AnimeSeries-Objekt oder None, wenn kein Anime mit dieser URL gefunden wurde
+        """
+        self.logger.debug(f"Suche Anime mit URL: {url}")
+        try:
+            anime = self.anime_service.get_anime_by_url(url)
+            if anime:
+                self.logger.debug(f"Anime gefunden: {anime.titel} (ID: {anime.series_id})")
+            else:
+                self.logger.debug(f"Kein Anime mit URL {url} gefunden")
+            return anime
+        except Exception as e:
+            self.logger.error(f"Fehler beim Suchen des Anime mit URL {url}: {e}")
+            return None
+    
+    def find_all_animes(self) -> List[AnimeSeries]:
+        """
+        Gibt eine Liste aller gespeicherten Anime zurück.
         
         Returns:
-            Ein Tupel aus (Anime, Staffel, Episode) oder None, wenn die Episode nicht gefunden wurde
+            Liste aller Anime in der Datenbank
         """
-        self.logger.debug(f"Suche nach Episode mit URL: {episode_url}")
-        result = self.anime_service.get_episode_by_url(episode_url)
+        self.logger.debug("Rufe alle Anime-Serien ab")
+        try:
+            animes = self.anime_service.find_all_animes()
+            self.logger.debug(f"{len(animes)} Anime-Serien gefunden")
+            return animes
+        except Exception as e:
+            self.logger.error(f"Fehler beim Abrufen aller Anime-Serien: {e}")
+            return []
+    
+    def get_episode_data(self, episode_url: str) -> Optional[Episode]:
+        """
+        Ruft die Daten einer Episode anhand ihrer URL ab.
         
-        if result is None:
-            self.logger.warning(f"Episode nicht gefunden: {episode_url}")
+        Args:
+            episode_url: Die Aniworld-URL der Episode
+            
+        Returns:
+            Das Episode-Objekt oder None, wenn keine Episode mit dieser URL gefunden wurde
+        """
+        self.logger.debug(f"Suche Episode mit URL: {episode_url}")
+        try:
+            episode = self.anime_service.get_episode_by_url(episode_url)
+            if episode:
+                self.logger.debug(f"Episode gefunden: {episode.titel} (ID: {episode.episode_id})")
+            else:
+                self.logger.debug(f"Keine Episode mit URL {episode_url} gefunden")
+            return episode
+        except Exception as e:
+            self.logger.error(f"Fehler beim Suchen der Episode mit URL {episode_url}: {e}")
             return None
-        
-        anime, season, episode = result
-        
-        # Konvertiert die Objekte in Dictionaries für einfacheren Zugriff
-        anime_dict = {
-            'series_id': anime.series_id,
-            'titel': anime.titel,
-            'beschreibung': anime.beschreibung,
-            'status': anime.status,
-            'aniworld_url': anime.aniworld_url
-        }
-        
-        season_dict = {
-            'season_id': season.season_id,
-            'series_id': season.series_id,
-            'staffel_nummer': season.staffel_nummer,
-            'titel': season.titel,
-            'aniworld_url': season.aniworld_url
-        }
-        
-        episode_dict = {
-            'episode_id': episode.episode_id,
-            'season_id': episode.season_id,
-            'episode_nummer': episode.episode_nummer,
-            'titel': episode.titel,
-            'aniworld_url': episode.aniworld_url
-        }
-        
-        return anime_dict, season_dict, episode_dict
     
     def record_download(self, 
-                      episode_url: str,
-                      provider_name: str,
-                      language_name: str,
-                      download_pfad: str,
-                      qualitaet: str = None) -> int:
+                        episode_url: str, 
+                        provider: str, 
+                        sprache: str, 
+                        zieldatei: str) -> int:
         """
-        Zeichnet einen Download in der Datenbank auf.
+        Zeichnet einen neuen Download in der Datenbank auf.
         
         Args:
-            episode_url: Die URL der Episode auf AniWorld
-            provider_name: Der Name des Anbieters (z.B. "Streamtape")
-            language_name: Die Sprache des Downloads (z.B. "Deutsch", "Japanisch")
-            download_pfad: Der Pfad, unter dem die Datei gespeichert wird
-            qualitaet: Die Qualität des Downloads (z.B. "1080p", "720p")
-        
-        Returns:
-            Die ID des aufgezeichneten Downloads, oder 0 bei Fehler
-        """
-        self.logger.info(f"Zeichne Download auf: {episode_url}, Anbieter: {provider_name}")
-        try:
-            download_id = self.download_service.record_download(
-                episode_url=episode_url,
-                provider_name=provider_name,
-                language_name=language_name,
-                download_pfad=download_pfad,
-                qualitaet=qualitaet
-            )
+            episode_url: Die URL der heruntergeladenen Episode
+            provider: Der Provider, von dem heruntergeladen wurde (z.B. "Vidoza")
+            sprache: Die Sprache des Downloads (z.B. "Deutsch")
+            zieldatei: Der vollständige Pfad der Zieldatei
             
-            if download_id > 0:
-                self.logger.debug(f"Download erfolgreich aufgezeichnet mit ID: {download_id}")
-            else:
-                self.logger.warning("Download konnte nicht aufgezeichnet werden")
+        Returns:
+            Die ID des aufgezeichneten Downloads oder -1 bei einem Fehler
+        """
+        self.logger.info(f"Zeichne Download auf: {episode_url} ({provider}, {sprache})")
+        try:
+            episode = self.get_episode_data(episode_url)
+            if not episode:
+                self.logger.warning(f"Episode mit URL {episode_url} nicht gefunden")
+                return -1
                 
+            download_id = self.download_service.record_download(
+                episode_id=episode.episode_id,
+                provider=provider,
+                sprache=sprache,
+                zieldatei=zieldatei,
+                status="gestartet"
+            )
+            self.logger.debug(f"Download aufgezeichnet mit ID: {download_id}")
             return download_id
         except Exception as e:
             self.logger.error(f"Fehler beim Aufzeichnen des Downloads: {e}")
-            return 0
+            return -1
     
-    def update_download_status(self, download_id: int, status: str, fehler_details: str = None) -> bool:
+    def update_download_status(self, download_id: int, status: str) -> bool:
         """
         Aktualisiert den Status eines Downloads.
         
         Args:
             download_id: Die ID des Downloads
-            status: Der neue Status (z.B. "abgeschlossen", "fehler", "in_bearbeitung")
-            fehler_details: Optionale Fehlerdetails, wenn der Status "fehler" ist
-        
-        Returns:
-            True, wenn die Aktualisierung erfolgreich war, sonst False
-        """
-        self.logger.debug(f"Aktualisiere Download-Status auf '{status}' für ID: {download_id}")
-        try:
-            result = self.download_service.update_download_status(
-                download_id=download_id,
-                status=status,
-                fehler_details=fehler_details
-            )
+            status: Der neue Status (z.B. "abgeschlossen", "fehlgeschlagen")
             
+        Returns:
+            True bei Erfolg, False bei einem Fehler
+        """
+        self.logger.debug(f"Aktualisiere Download-Status für ID {download_id} auf '{status}'")
+        try:
+            result = self.download_service.update_download_status(download_id, status)
             if result:
-                self.logger.debug(f"Download-Status erfolgreich aktualisiert für ID: {download_id}")
+                self.logger.debug(f"Download-Status erfolgreich aktualisiert")
             else:
-                self.logger.warning(f"Download mit ID {download_id} konnte nicht aktualisiert werden")
-                
+                self.logger.warning(f"Download mit ID {download_id} nicht gefunden")
             return result
         except Exception as e:
             self.logger.error(f"Fehler beim Aktualisieren des Download-Status: {e}")

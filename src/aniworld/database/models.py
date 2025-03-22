@@ -24,8 +24,7 @@ class AnimeSeries:
     fsk: Optional[str] = None
     bewertung: Optional[float] = None
     aniworld_url: Optional[str] = None
-    erstellt_am: Optional[datetime] = None
-    aktualisiert_am: Optional[datetime] = None
+    letzte_aktualisierung: Optional[datetime] = None
 
 @dataclass
 class Season:

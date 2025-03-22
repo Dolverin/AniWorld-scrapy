@@ -147,6 +147,51 @@ class AnimeService:
         logging.info(f"Neue Episode angelegt: {episode_nummer} für Staffel {season_id} (ID: {episode.episode_id})")
         return episode
     
+    def get_seasons_by_anime_id(self, series_id: int) -> List[Season]:
+        """
+        Gibt alle Staffeln einer Anime-Serie zurück.
+        
+        Args:
+            series_id: ID der Anime-Serie
+            
+        Returns:
+            Liste der Staffeln
+        """
+        return self.season_repo.find_by_anime_id(series_id)
+    
+    def get_anime_by_url(self, url: str) -> Optional[AnimeSeries]:
+        """
+        Findet einen Anime anhand seiner Aniworld-URL.
+        
+        Args:
+            url: Die Aniworld-URL des Anime
+            
+        Returns:
+            Das AnimeSeries-Objekt oder None, wenn kein Anime mit dieser URL gefunden wurde
+        """
+        return self.anime_repo.find_by_url(url)
+    
+    def find_all_animes(self) -> List[AnimeSeries]:
+        """
+        Gibt eine Liste aller Anime-Serien zurück.
+        
+        Returns:
+            Liste aller Anime in der Datenbank
+        """
+        return self.anime_repo.find_all()
+    
+    def get_episode_by_url(self, url: str) -> Optional[Episode]:
+        """
+        Findet eine Episode anhand ihrer URL.
+        
+        Args:
+            url: Die URL der Episode
+            
+        Returns:
+            Das Episode-Objekt oder None, wenn keine Episode mit dieser URL gefunden wurde
+        """
+        return self.episode_repo.find_by_url(url)
+    
     def save_from_scraper_data(self, anime_data: Dict[str, Any]) -> int:
         """
         Speichert Daten, die vom Scraper gesammelt wurden, in der Datenbank
@@ -222,30 +267,6 @@ class AnimeService:
                                 self.episode_repo.save(episode)
         
         return anime.series_id
-    
-    def get_episode_by_url(self, episode_url: str) -> Optional[Tuple[AnimeSeries, Season, Episode]]:
-        """
-        Findet eine Episode anhand ihrer URL und gibt auch die zugehörige Serie und Staffel zurück
-        
-        Args:
-            episode_url: AniWorld-URL der Episode
-            
-        Returns:
-            Tuple aus (AnimeSeries, Season, Episode) oder None, wenn nicht gefunden
-        """
-        episode = self.episode_repo.find_by_url(episode_url)
-        if not episode:
-            return None
-        
-        season = self.season_repo.find_by_id(episode.season_id)
-        if not season:
-            return None
-        
-        anime = self.anime_repo.find_by_id(season.series_id)
-        if not anime:
-            return None
-        
-        return (anime, season, episode)
 
 
 class DownloadService:
@@ -421,4 +442,198 @@ class DownloadService:
             ".webm": "WEBM"
         }
         
-        return format_map.get(extension) 
+        return format_map.get(extension)
+
+
+class StatisticsService:
+    """Service für Datenbankstatistiken"""
+    
+    def __init__(self):
+        """Initialisiert den Statistik-Service mit den erforderlichen Repositories"""
+        self.logger = logging.getLogger('aniworld.db.service.stats')
+        self.anime_repo = AnimeRepository()
+        self.season_repo = SeasonRepository()
+        self.episode_repo = EpisodeRepository()
+        self.download_repo = DownloadRepository()
+    
+    def count_animes(self) -> int:
+        """
+        Zählt die Anzahl der Anime-Serien in der Datenbank
+        
+        Returns:
+            Anzahl der Anime-Serien
+        """
+        query = "SELECT COUNT(*) FROM anime_series"
+        result = self.anime_repo._execute_query_one(query)
+        return result[0] if result else 0
+    
+    def count_seasons(self) -> int:
+        """
+        Zählt die Anzahl der Staffeln in der Datenbank
+        
+        Returns:
+            Anzahl der Staffeln
+        """
+        query = "SELECT COUNT(*) FROM seasons"
+        result = self.season_repo._execute_query_one(query)
+        return result[0] if result else 0
+    
+    def count_episodes(self) -> int:
+        """
+        Zählt die Anzahl der Episoden in der Datenbank
+        
+        Returns:
+            Anzahl der Episoden
+        """
+        query = "SELECT COUNT(*) FROM episoden"
+        result = self.episode_repo._execute_query_one(query)
+        return result[0] if result else 0
+    
+    def count_downloads(self) -> int:
+        """
+        Zählt die Anzahl der Downloads in der Datenbank
+        
+        Returns:
+            Anzahl der Downloads
+        """
+        query = "SELECT COUNT(*) FROM downloads"
+        result = self.download_repo._execute_query_one(query)
+        return result[0] if result else 0
+    
+    def get_top_anime(self, limit: int = 5) -> List[Tuple[AnimeSeries, int]]:
+        """
+        Gibt die Top-Anime mit den meisten Episoden zurück
+        
+        Args:
+            limit: Anzahl der zurückzugebenden Anime
+            
+        Returns:
+            Liste von Tupeln aus (AnimeSeries, Episodenanzahl)
+        """
+        query = """
+            SELECT a.series_id, a.titel, a.original_titel, a.beschreibung, 
+                   a.erscheinungsjahr, a.status, a.studio, a.regisseur, 
+                   a.aniworld_url, a.cover_url, a.letzte_aktualisierung,
+                   COUNT(e.episode_id) as episode_count
+            FROM anime_series a
+            JOIN seasons s ON a.series_id = s.series_id
+            JOIN episoden e ON s.season_id = e.season_id
+            GROUP BY a.series_id
+            ORDER BY episode_count DESC
+            LIMIT %s
+        """
+        
+        results = self.anime_repo._execute_query(query, (limit,))
+        top_anime = []
+        
+        for row in results:
+            anime = AnimeSeries(
+                series_id=row[0],
+                titel=row[1],
+                original_titel=row[2],
+                beschreibung=row[3],
+                erscheinungsjahr=row[4],
+                status=row[5],
+                studio=row[6],
+                regisseur=row[7],
+                aniworld_url=row[8],
+                cover_url=row[9],
+                letzte_aktualisierung=row[10]
+            )
+            episode_count = row[11]
+            top_anime.append((anime, episode_count))
+        
+        return top_anime
+    
+    def get_recent_downloads(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Gibt die zuletzt durchgeführten Downloads zurück
+        
+        Args:
+            limit: Anzahl der zurückzugebenden Downloads
+            
+        Returns:
+            Liste mit Download-Informationen
+        """
+        query = """
+            SELECT d.download_id, d.status, d.zieldatei, d.sprache, d.provider,
+                   e.titel as episode_titel, s.titel as season_titel, a.titel as anime_titel
+            FROM downloads d
+            JOIN episoden e ON d.episode_id = e.episode_id
+            JOIN seasons s ON e.season_id = s.season_id
+            JOIN anime_series a ON s.series_id = a.series_id
+            ORDER BY d.download_datum DESC
+            LIMIT %s
+        """
+        
+        results = self.download_repo._execute_query(query, (limit,))
+        recent_downloads = []
+        
+        for row in results:
+            download_info = {
+                'download_id': row[0],
+                'status': row[1],
+                'zieldatei': row[2],
+                'sprache': row[3],
+                'provider': row[4],
+                'episode_titel': row[5],
+                'season_titel': row[6],
+                'anime_titel': row[7]
+            }
+            recent_downloads.append(download_info)
+        
+        return recent_downloads
+    
+    def get_download_statistics(self) -> Dict[str, Any]:
+        """
+        Sammelt verschiedene Statistiken zu Downloads
+        
+        Returns:
+            Dictionary mit Download-Statistiken
+        """
+        stats = {}
+        
+        # Gesamtzahl Downloads nach Status
+        query_status = """
+            SELECT status, COUNT(*) 
+            FROM downloads 
+            GROUP BY status
+        """
+        results = self.download_repo._execute_query(query_status)
+        status_counts = {row[0]: row[1] for row in results}
+        stats['status_counts'] = status_counts
+        
+        # Durchschnittliche Dateigröße
+        query_size = """
+            SELECT AVG(dateigroesse) 
+            FROM downloads 
+            WHERE dateigroesse IS NOT NULL
+        """
+        result = self.download_repo._execute_query_one(query_size)
+        stats['avg_file_size'] = result[0] if result and result[0] else 0
+        
+        # Beliebteste Provider
+        query_provider = """
+            SELECT provider, COUNT(*) as count 
+            FROM downloads 
+            GROUP BY provider 
+            ORDER BY count DESC 
+            LIMIT 3
+        """
+        results = self.download_repo._execute_query(query_provider)
+        top_providers = [(row[0], row[1]) for row in results]
+        stats['top_providers'] = top_providers
+        
+        # Beliebteste Sprachen
+        query_language = """
+            SELECT sprache, COUNT(*) as count 
+            FROM downloads 
+            GROUP BY sprache 
+            ORDER BY count DESC 
+            LIMIT 3
+        """
+        results = self.download_repo._execute_query(query_language)
+        top_languages = [(row[0], row[1]) for row in results]
+        stats['top_languages'] = top_languages
+        
+        return stats 

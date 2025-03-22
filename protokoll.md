@@ -73,6 +73,37 @@
   - Implementierung von CLI-Befehlen für Datenbankoperationen
   - Entwicklung einer Benutzeroberfläche für die Mediathek
 
+## [2024-05-08 14:10] Integration der Datenbank in CLI und Scraper
+
+- **Geänderte Dateien**:
+  - `src/aniworld/database/integration.py` - Erweiterung um Methoden für Anime-Abfragen
+  - `src/aniworld/database/services.py` - Erweiterung der AnimeService-Klasse und Hinzufügen eines StatisticsService
+  - `src/aniworld/database/repositories.py` - Implementierung wichtiger Repository-Methoden
+  - `src/aniworld/database/models.py` - Anpassung der Datenmodelle
+  - `src/aniworld/__main__.py` - Integration von CLI-Befehlen für Datenbankoperationen
+  - `src/aniworld/execute.py` - Integration der Datenbankfunktionen in die Download-Funktion
+
+- **Zusammenfassung der Änderungen**:
+  - Die Datenbankintegration wurde mit neuen Methoden erweitert, um Anime-Daten abzufragen
+  - Ein neuer StatisticsService wurde implementiert, um Statistiken über gespeicherte Daten zu sammeln
+  - CLI-Befehle wurden hinzugefügt, um die Datenbank abzufragen und Informationen anzuzeigen:
+    - `--db-list-anime`: Listet alle Anime in der Datenbank auf
+    - `--db-anime-info`: Zeigt detaillierte Informationen zu einem Anime
+    - `--db-stats`: Zeigt Datenbankstatistiken an
+  - Die Download-Funktionalität wurde erweitert, um Downloads in der Datenbank zu protokollieren
+  - Fehlerbehandlung wurde verbessert, um Datenbankprobleme abzufangen
+
+- **Aktueller Status**:
+  - Die Datenbankintegration ist jetzt vollständig in die CLI und den Scraper integriert
+  - Downloads werden automatisch in der Datenbank protokolliert und mit Statusinformationen aktualisiert
+  - Benutzer können mit CLI-Befehlen die Datenbank abfragen und Informationen anzeigen
+
+- **Nächste Schritte**:
+  - Tests für die neuen Datenbankfunktionen schreiben
+  - Integration der Datenbankfunktionen in die Scraper-Pipeline für automatische Speicherung von gescrapten Daten
+  - Implementierung von Cache-Mechanismen, um Duplikate zu vermeiden
+  - Dokumentation der neuen Funktionen aktualisieren
+
 ## Glossar
 
 ## Meilensteine 

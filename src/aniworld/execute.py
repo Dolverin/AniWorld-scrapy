@@ -276,45 +276,99 @@ def build_syncplay_command(
 
 def perform_action(params: Dict[str, Any]) -> None:
     logging.debug("Performing action with params: %s", params)
-    action = params.get("action")
-    link = params.get("link")
-    mpv_title = params.get("mpv_title")
-    anime_title = params.get("anime_title")
-    anime_slug = params.get("anime_slug")
-    episode_number = params.get("episode_number")
-    season_number = params.get("season_number")
-    only_command = params.get("only_command", False)
-    provider = params.get("provider")
-    aniskip_selected = bool(params.get("aniskip_selected", False))
 
-    logging.debug("aniskip_selected: %s", aniskip_selected)
+    try:
+        if 'soup' in params:
+            soup = params['soup']
+            episode_title = get_episode_title(soup)
+            logging.debug("Episode title: %s", episode_title)
+            if not episode_title:
+                logging.warning("Episode title not found in soup.")
+                episode_title = "Unknown"
+            anime_title = get_anime_title(soup)
+            logging.debug("Anime title: %s", anime_title)
+            if not anime_title:
+                logging.warning("Anime title not found in soup.")
+                anime_title = "Unknown"
+        else:
+            episode_title = 'Unknown Episode'
+            anime_title = 'Unknown Anime'
 
-    aniskip_options = process_aniskip_options(
-        aniskip_selected=aniskip_selected,
-        anime_title=anime_title,
-        season_number=season_number,
-        episode_number=episode_number,
-        anime_slug=anime_slug
-    )
+        link_page = params.get('link_page', '')
+        slug = params.get('anime_slug', '')
+        season_number = params.get('season_number', 0)
+        episode_number = params.get('episode_number', 0)
+        action = params.get('action', 'Watch')
+        aniskip_selected = params.get('aniskip_selected', False)
+        only_command = params.get('only_command', False)
+        selected_provider = params.get('selected_provider', 'VOE')
+        mpv_title = f"{anime_title} - Season {season_number} - Episode {episode_number}"
+        output_directory = params.get('output_directory', anime_title)
+        output_directory = params.get('output', '')
 
-    if action == "Watch":
-        if not only_command:
-            if not platform.system() == "Windows":
-                countdown()
-        handle_watch_action(
-            link, mpv_title, aniskip_selected, aniskip_options, only_command, provider
-        )
-    elif action == "Download":
-        handle_download_action(params)
-    elif action == "Syncplay":
-        if not only_command:
-            if not platform.system() == "Windows":
-                countdown()
-        setup_autostart()
-        setup_autoexit()
-        handle_syncplay_action(
-            link, mpv_title, aniskip_options, only_command, provider
-        )
+        if action in ('Watch', 'Syncplay'):
+            aniskip_options = process_aniskip_options(
+                aniskip_selected, anime_title, season_number, episode_number, slug
+            )
+            logging.debug("Aniskip options: %s", aniskip_options)
+
+            if action == 'Watch':
+                handle_watch_action(
+                    link_page, mpv_title, aniskip_selected,
+                    aniskip_options, only_command, selected_provider
+                )
+            else:  # action == 'Syncplay'
+                handle_syncplay_action(
+                    link_page, mpv_title, aniskip_options, only_command, selected_provider
+                )
+        else:  # action == 'Download'
+            # Datenbankintegration für Downloads
+            download_id = -1
+            try:
+                from aniworld.database.integration import DatabaseIntegration
+                db = DatabaseIntegration()
+                episode_url = params.get('episode_url', '')
+                language = params.get('language', 'Deutsch')
+                sanitized_title = sanitize_path(mpv_title)
+                download_path = os.path.join(output_directory, f"{sanitized_title}.mp4")
+                
+                # Zeichne Download auf, bevor wir beginnen
+                download_id = db.record_download(
+                    episode_url=episode_url,
+                    provider=selected_provider,
+                    sprache=language,
+                    zieldatei=download_path
+                )
+                logging.info(f"Download in Datenbank aufgezeichnet mit ID: {download_id}")
+            except ImportError:
+                logging.debug("Datenbankmodul nicht verfügbar, Download wird nicht protokolliert")
+            except Exception as e:
+                logging.error(f"Fehler beim Aufzeichnen des Downloads: {e}")
+            
+            # Führe den eigentlichen Download durch
+            try:
+                handle_download_action(params)
+                
+                # Aktualisiere den Download-Status in der Datenbank, wenn möglich
+                if download_id > 0:
+                    try:
+                        db.update_download_status(download_id, "abgeschlossen")
+                        logging.info(f"Download-Status aktualisiert auf 'abgeschlossen' für ID: {download_id}")
+                    except Exception as e:
+                        logging.error(f"Fehler beim Aktualisieren des Download-Status: {e}")
+            except Exception as download_error:
+                logging.error(f"Download fehlgeschlagen: {download_error}")
+                
+                # Aktualisiere den Download-Status in der Datenbank als fehlgeschlagen
+                if download_id > 0:
+                    try:
+                        db.update_download_status(download_id, "fehlgeschlagen")
+                        logging.info(f"Download-Status aktualisiert auf 'fehlgeschlagen' für ID: {download_id}")
+                    except Exception as e:
+                        logging.error(f"Fehler beim Aktualisieren des Download-Status: {e}")
+
+    except Exception as e:
+        logging.error("Error while performing action: %s", e)
 
 
 def process_aniskip_options(

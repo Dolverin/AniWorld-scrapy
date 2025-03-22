@@ -49,6 +49,13 @@ from aniworld.extractors import (
     hanime
 )
 
+# Import für die Datenbankintegration
+try:
+    from aniworld.database.integration import DatabaseIntegration
+    HAS_DATABASE = True
+except ImportError:
+    HAS_DATABASE = False
+
 from aniworld.globals import DEFAULT_DOWNLOAD_PATH
 
 
@@ -464,6 +471,35 @@ def parse_arguments():
         help='Search query input - E.g. demon'
     )
 
+    # Database options (Neue Optionsgruppe für Datenbankbefehle)
+    if HAS_DATABASE:
+        db_group = parser.add_argument_group('Database Options')
+        db_group.add_argument(
+            '--db-list-anime',
+            action='store_true',
+            help='Liste alle Anime in der Datenbank auf'
+        )
+        db_group.add_argument(
+            '--db-anime-info',
+            type=str,
+            help='Zeige detaillierte Informationen zu einem Anime (ID oder URL)'
+        )
+        db_group.add_argument(
+            '--db-list-downloads',
+            action='store_true',
+            help='Liste alle Downloads auf'
+        )
+        db_group.add_argument(
+            '--db-download-status',
+            type=int,
+            help='Zeige Status eines Downloads anhand seiner ID'
+        )
+        db_group.add_argument(
+            '--db-stats',
+            action='store_true',
+            help='Zeige Datenbankstatistiken'
+        )
+
     # Episode options
     episode_group = parser.add_argument_group('Episode Options')
     episode_group.add_argument(
@@ -764,6 +800,10 @@ def main():
     try:
         args = parse_arguments()
         logging.debug("Parsed arguments: %s", args)
+        
+        # Zuerst Datenbankbefehle prüfen
+        if HAS_DATABASE and handle_database_commands(args):
+            sys.exit(0)
 
         validate_link(args)
         handle_query(args)
@@ -913,6 +953,155 @@ def run_app_with_query(args):
     except KeyboardInterrupt:
         logging.debug("KeyboardInterrupt encountered. Exiting.")
         sys.exit()
+
+
+def handle_database_commands(args):
+    """
+    Verarbeitet die Datenbankkommandos aus den Argumenten
+    
+    Args:
+        args: Die geparsten Argumente
+        
+    Returns:
+        True, wenn ein Datenbankbefehl ausgeführt wurde, sonst False
+    """
+    if not HAS_DATABASE:
+        return False
+        
+    try:
+        db = DatabaseIntegration()
+    except Exception as e:
+        logging.error(f"Fehler beim Verbinden zur Datenbank: {e}")
+        print(f"Datenbankfehler: {e}")
+        return True
+        
+    # --db-list-anime: Liste aller Anime anzeigen
+    if hasattr(args, 'db_list_anime') and args.db_list_anime:
+        print("\n=== Anime in der Datenbank ===")
+        try:
+            animes = db.find_all_animes()
+            if not animes:
+                print("Keine Anime in der Datenbank gefunden.")
+            else:
+                print(f"Insgesamt {len(animes)} Anime gefunden:\n")
+                for anime in animes:
+                    status_symbol = "🔄" if anime.status == "laufend" else "✅"
+                    print(f"ID: {anime.series_id} | {status_symbol} {anime.titel}")
+                    if anime.original_titel:
+                        print(f"    Original: {anime.original_titel}")
+                    if anime.erscheinungsjahr:
+                        print(f"    Jahr: {anime.erscheinungsjahr}")
+                    print(f"    URL: {anime.aniworld_url}\n")
+        except Exception as e:
+            logging.error(f"Fehler beim Auflisten der Anime: {e}")
+            print(f"Fehler: {e}")
+        return True
+        
+    # --db-anime-info: Detaillierte Informationen zu einem Anime
+    if hasattr(args, 'db_anime_info') and args.db_anime_info:
+        anime_identifier = args.db_anime_info
+        anime = None
+        
+        try:
+            # Prüfen, ob es eine ID oder URL ist
+            if anime_identifier.isdigit():
+                # Nach ID suchen (nicht implementiert, aber könnte hinzugefügt werden)
+                print(f"Suche nach Anime mit ID {anime_identifier} ist noch nicht implementiert.")
+                return True
+            else:
+                # Nach URL suchen
+                anime = db.get_anime_by_url(anime_identifier)
+                
+            if not anime:
+                print(f"Kein Anime mit Identifier '{anime_identifier}' gefunden.")
+                return True
+                
+            print("\n=== Anime Details ===")
+            print(f"Titel: {anime.titel}")
+            if anime.original_titel:
+                print(f"Originaltitel: {anime.original_titel}")
+            if anime.beschreibung:
+                print(f"\nBeschreibung: {anime.beschreibung}")
+            print(f"\nStatus: {anime.status}")
+            if anime.erscheinungsjahr:
+                print(f"Erscheinungsjahr: {anime.erscheinungsjahr}")
+            if anime.studio:
+                print(f"Studio: {anime.studio}")
+            if anime.regisseur:
+                print(f"Regisseur: {anime.regisseur}")
+            print(f"AniWorld URL: {anime.aniworld_url}")
+            if anime.cover_url:
+                print(f"Cover URL: {anime.cover_url}")
+            if anime.letzte_aktualisierung:
+                print(f"Letzte Aktualisierung: {anime.letzte_aktualisierung}")
+                
+            # Staffeln abrufen
+            # Angenommen, es gibt eine Methode, um alle Staffeln eines Anime abzurufen
+            # Die genaue Implementierung müsste angepasst werden
+            try:
+                from aniworld.database.services import AnimeService
+                service = AnimeService()
+                seasons = service.get_seasons_by_anime_id(anime.series_id)
+                
+                if seasons:
+                    print(f"\nStaffeln ({len(seasons)}):")
+                    for season in seasons:
+                        print(f"  Staffel {season.staffel_nummer}: {season.titel or 'Ohne Titel'}")
+                        
+                        # Episoden für diese Staffel abrufen
+                        episodes = service.get_episodes_by_season_id(season.season_id)
+                        if episodes:
+                            print(f"    Episoden ({len(episodes)}):")
+                            for episode in episodes:
+                                print(f"      Episode {episode.episode_nummer}: {episode.titel or 'Ohne Titel'}")
+            except Exception as e:
+                logging.error(f"Fehler beim Abrufen der Staffeln: {e}")
+                
+        except Exception as e:
+            logging.error(f"Fehler beim Abrufen der Anime-Details: {e}")
+            print(f"Fehler: {e}")
+        return True
+        
+    # --db-stats: Datenbankstatistiken anzeigen
+    if hasattr(args, 'db_stats') and args.db_stats:
+        print("\n=== Datenbankstatistiken ===")
+        try:
+            # Diese Funktionen müssten noch implementiert werden
+            from aniworld.database.services import StatisticsService
+            stats = StatisticsService()
+            
+            anime_count = stats.count_animes()
+            season_count = stats.count_seasons()
+            episode_count = stats.count_episodes()
+            download_count = stats.count_downloads()
+            
+            print(f"Gesamtzahl Anime: {anime_count}")
+            print(f"Gesamtzahl Staffeln: {season_count}")
+            print(f"Gesamtzahl Episoden: {episode_count}")
+            print(f"Gesamtzahl Downloads: {download_count}")
+            
+            # Weitere Statistiken könnten hier angezeigt werden
+            top_anime = stats.get_top_anime(limit=5)
+            if top_anime:
+                print("\nTop 5 Anime (nach Episodenanzahl):")
+                for i, (anime, count) in enumerate(top_anime, 1):
+                    print(f"{i}. {anime.titel} ({count} Episoden)")
+                    
+            recent_downloads = stats.get_recent_downloads(limit=5)
+            if recent_downloads:
+                print("\nLetzte 5 Downloads:")
+                for dl in recent_downloads:
+                    status_emoji = "✅" if dl.status == "abgeschlossen" else "🔄" if dl.status == "gestartet" else "❌"
+                    print(f"{status_emoji} {dl.episode_titel} ({dl.provider}, {dl.sprache})")
+                    
+        except ImportError:
+            print("StatisticsService nicht verfügbar. Funktionalität nicht implementiert.")
+        except Exception as e:
+            logging.error(f"Fehler beim Abrufen der Datenbankstatistiken: {e}")
+            print(f"Fehler: {e}")
+        return True
+            
+    return False
 
 
 if __name__ == "__main__":
