@@ -15,6 +15,7 @@ from .pipeline import DatabasePipeline, get_pipeline
 from mysql.connector import connect
 from mysql.connector.connection import MySQLConnection
 from .config import get_config
+import logging
 
 def SessionLocal() -> MySQLConnection:
     """
@@ -25,6 +26,11 @@ def SessionLocal() -> MySQLConnection:
     """
     config = get_config()
     connection_params = config.get_connection_params()
+    
+    # Setze autocommit auf True, damit Änderungen ohne explizites Commit gespeichert werden
+    connection_params['autocommit'] = True
+    
+    logging.debug(f"Erstelle neue Datenbankverbindung mit autocommit=True")
     return connect(**connection_params)
 
 # Exportiere Funktionsnamen für "from aniworld.database import *"

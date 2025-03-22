@@ -486,4 +486,33 @@
   2. Verbesserung der Fehlerbehandlung bei der Datenbankanbindung
   3. Optimierung der Performance der Datenbankzugriffe
 
+## [2025-03-22 18:10] Behebung des Datenbankcommit-Fehlers bei der Suche
+
+- **Geänderte Dateien**:
+  - `src/aniworld/database/__init__.py` - autocommit für SessionLocal aktiviert
+  - `src/aniworld/search.py` - Expliziten Commit-Aufruf hinzugefügt
+
+- **Problem**:
+  Bei der Suche wurden Anime-Daten zwar gefunden, aber nicht in der Datenbank gespeichert. Der Fehler zeigte sich dadurch, dass die Logging-Ausgabe `Anime '...' in Datenbank gespeichert mit ID: None` eine ID von `None` anzeigte.
+
+- **Ursache**:
+  Die Datenbankänderungen wurden nicht übertragen (committed), da:
+  1. Die SessionLocal-Funktion standardmäßig autocommit=False benutzte
+  2. In der save_anime_data_from_html-Funktion kein explizites commit() aufgerufen wurde
+
+- **Lösung**:
+  1. `autocommit=True` in der SessionLocal-Funktion gesetzt, damit Änderungen automatisch gespeichert werden
+  2. Einen expliziten session.commit()-Aufruf in der save_anime_data_from_html-Funktion hinzugefügt als Absicherung
+  3. Verbesserte Fehlerbehandlung und Logging für Datenbankoperationen implementiert
+
+- **Aktueller Status**:
+  - Die Anwendung sollte nun Anime-Daten korrekt in der Datenbank speichern
+  - Während der Suche werden Anime-Details automatisch in der Datenbank hinterlegt
+  - Der curses-Fehler bei der Anzeige der Suchergebnisse ist noch zu beheben
+
+- **Nächste Schritte**:
+  1. Test des Speicherns in der Datenbank mit verschiedenen Anime
+  2. Behebung des curses-Fehlers bei der Anzeige der Suchergebnisse
+  3. Optimierung der Datenbankanbindung für bessere Performance
+
 ## Glossar 

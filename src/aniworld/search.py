@@ -369,6 +369,20 @@ def save_anime_data_from_html(
                             episode.updated_at = datetime.now()
                             episode_repo.update(episode)
 
+            # Explizites Commit, falls autocommit nicht funktioniert
+            if hasattr(session, 'commit'):
+                try:
+                    session.commit()
+                    module_log.debug(f"Änderungen für Anime '{anime.title}' erfolgreich committet")
+                except Exception as commit_error:
+                    module_log.error(f"Commit-Fehler: {commit_error}")
+                    if should_close_session:
+                        try:
+                            session.rollback()
+                        except:
+                            pass
+                    return None
+
             return anime
 
         except Exception as e:
