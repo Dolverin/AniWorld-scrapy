@@ -144,36 +144,72 @@ def fetch_url_content_with_playwright(
     install_and_import("playwright")
     from playwright.sync_api import sync_playwright  # pylint: disable=import-error, import-outside-toplevel
 
+    # Standardmäßig headless verwenden, um XServer-Fehler zu vermeiden
+    # Wenn DISPLAY-Umgebungsvariable gesetzt ist, kann nicht-headless verwendet werden
+    use_headless = True  # Standardwert
+    has_display = os.environ.get('DISPLAY') is not None
+    
+    if "seriesSearch" in url and has_display:
+        # Nur wenn DISPLAY verfügbar ist, non-headless verwenden
+        use_headless = False
+        print("\nInfo: Browser wird im sichtbaren Modus geöffnet für Captcha-Lösung")
+    
     with sync_playwright() as p:
         options = {'proxy': {'server': proxy}} if proxy else {}
-        # Ändere auf non-headless Modus für Captcha bei Suchfunktionen
-        headless = False if "seriesSearch" in url else os.getenv("HEADLESS", not aniworld_globals.IS_DEBUG_MODE)
-        browser = p.chromium.launch(headless=headless)
-
         try:
-            page = browser.new_page(**options)
-            page.set_extra_http_headers(headers)
-
+            logging.debug(f"Starte Browser mit headless={use_headless}")
+            browser = p.chromium.launch(headless=use_headless)
+            
             try:
-                logging.debug("Fetching URL with Playwright: %s", url)
-                page.goto(url, timeout=60000)  # 60 Sekunden Timeout
-
-                # Bei Suchanfragen mehr Zeit für manuelle Captcha-Lösung
-                if "seriesSearch" in url:
-                    logging.info("Suchfunktion aktiv - Falls ein Captcha erscheint, bitte lösen Sie es im Browser!")
-                    print("\nACHTUNG: Ein Browser wurde geöffnet. Falls ein Captcha erscheint, bitte lösen Sie es dort!")
-                    print("Nach der Lösung des Captchas wird die Suche automatisch fortgesetzt.\n")
-                    # Warte länger bei Suche für manuelle Interaktion
-                    page.wait_for_load_state("networkidle", timeout=120000)  # 2 Minuten für manuelles Lösen
-
-                content = page.content()
-                return content.encode("utf-8")
-            except Exception as e:
-                if check:
-                    logging.critical("Request to %s failed with Playwright: %s", url, e)
-                return None
-        finally:
-            browser.close()
+                page = browser.new_page(**options)
+                page.set_extra_http_headers(headers)
+    
+                try:
+                    logging.debug("Fetching URL with Playwright: %s", url)
+                    page.goto(url, timeout=60000)  # 60 Sekunden Timeout
+    
+                    # Bei Suchanfragen mehr Zeit für manuelle Captcha-Lösung
+                    if "seriesSearch" in url:
+                        logging.info("Suchfunktion aktiv - Prüfe auf Captchas...")
+                        if not use_headless:
+                            print("\nACHTUNG: Falls ein Captcha erscheint, bitte lösen Sie es im Browser!")
+                            print("Nach der Lösung des Captchas wird die Suche automatisch fortgesetzt.\n")
+                            # Warte länger bei Suche für manuelle Interaktion
+                            page.wait_for_load_state("networkidle", timeout=120000)  # 2 Minuten für manuelles Lösen
+                        else:
+                            print("\nInfo: Headless-Modus aktiv, automatische Captcha-Erkennung aktiviert")
+                            # Prüfen auf bekannte Captcha-Muster
+                            if page.locator("text=Captcha").count() > 0 or page.locator("text=Bot").count() > 0:
+                                logging.warning("Captcha erkannt im Headless-Modus - kein manuelles Lösen möglich")
+                                print("ACHTUNG: Captcha erkannt, kann nicht automatisch gelöst werden!")
+                                print("Bitte installieren Sie einen X-Server oder verwenden SSH mit X-Forwarding.")
+    
+                    content = page.content()
+                    return content.encode("utf-8")
+                except Exception as e:
+                    if check:
+                        logging.critical("Request to %s failed with Playwright: %s", url, e)
+                    return None
+            finally:
+                browser.close()
+        except Exception as browser_error:
+            logging.error(f"Browser-Fehler: {browser_error}")
+            # Fallback: Versuche headless, wenn nicht-headless fehlschlägt
+            if not use_headless:
+                logging.info("Versuche Fallback zu headless Modus")
+                try:
+                    browser = p.chromium.launch(headless=True)
+                    try:
+                        page = browser.new_page(**options)
+                        page.set_extra_http_headers(headers)
+                        page.goto(url, timeout=30000)
+                        content = page.content()
+                        return content.encode("utf-8")
+                    finally:
+                        browser.close()
+                except Exception as fallback_error:
+                    logging.error(f"Auch Fallback zu headless fehlgeschlagen: {fallback_error}")
+            return None
 
 
 def clear_screen() -> None:

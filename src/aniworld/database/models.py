@@ -3,7 +3,7 @@ Datenmodelle für die Datenbankentitäten
 Verwendet Dataclasses für eine einfache Serialisierung/Deserialisierung
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -24,7 +24,9 @@ class AnimeSeries:
     fsk: Optional[str] = None
     bewertung: Optional[float] = None
     aniworld_url: Optional[str] = None
-    letzte_aktualisierung: Optional[datetime] = None
+    erstellt_am: Optional[datetime] = None
+    aktualisiert_am: Optional[datetime] = None
+    genres: List[str] = field(default_factory=list)  # Genres als Liste von Strings
 
 @dataclass
 class Season:
@@ -142,4 +144,11 @@ class Benutzer:
     api_token: Optional[str] = None
     api_token_ablauf: Optional[datetime] = None
     erstellt_am: Optional[datetime] = None
-    aktualisiert_am: Optional[datetime] = None 
+    aktualisiert_am: Optional[datetime] = None
+
+@dataclass
+class AnimeGenre:
+    """Repräsentiert die Verbindung zwischen Anime und Genre (n:m Beziehung)"""
+    anime_genre_id: Optional[int] = None
+    series_id: int = 0
+    genre_id: int = 0 

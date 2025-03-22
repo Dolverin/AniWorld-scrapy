@@ -435,4 +435,31 @@
   - Untersuchung alternativer Suchmethoden ohne AJAX-Anfragen
   - Optimierung des Captcha-Erkennungsmechanismus
 
+## [2025-03-22 17:57] X-Server-Fehler beim Durchführen von Suchanfragen
+
+- **Geänderte Dateien**:
+  - `src/aniworld/common/common.py` - Headless-Modus und X-Server-Erkennung implementiert
+  - `src/aniworld/database/models.py` - Genres zum Anime-Modell hinzugefügt
+
+- **Problem**:
+  Bei der Durchführung von Suchanfragen mit Playwright im non-headless Modus kam es zu einem Fehler, da kein X-Server verfügbar war: `TargetClosedError: Target page, context or browser has been closed`. Der Browser konnte nicht im sichtbaren Modus gestartet werden, da keine grafische Umgebung verfügbar war.
+
+- **Lösung**:
+  1. Prüfung auf Vorhandensein der DISPLAY-Umgebungsvariable implementiert
+  2. Falls kein X-Server verfügbar ist, wird automatisch der headless-Modus verwendet
+  3. Fallback-Mechanismus erstellt, der bei Fehlern im non-headless Modus auf headless umschaltet
+  4. Verbesserte Fehlerbehandlung und Benutzerführung für Captcha-Situationen
+
+- **Verbesserungen an Datenmodellen**:
+  1. `AnimeSeries`-Modell um Feld für Genres erweitert
+  2. Neues `AnimeGenre`-Modell für n:m-Beziehung zwischen Animes und Genres erstellt
+  
+- **Aktueller Status**:
+  Die Anwendung kann nun sowohl in Umgebungen mit als auch ohne X-Server ausgeführt werden. Bei Suchanfragen wird automatisch der richtige Modus gewählt, was die Benutzererfahrung verbessert.
+
+- **Nächste Schritte**:
+  1. Implementierung der Datenbank-Migrationen für die Genres-Unterstützung
+  2. Verbesserung der Genre-Extraktion aus der Website
+  3. Weitere Optimierung der Captcha-Erkennung und -Behandlung
+
 ## Glossar 
