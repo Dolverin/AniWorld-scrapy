@@ -85,7 +85,7 @@ class AnimeRepository(BaseRepository):
             query = """
                 INSERT INTO anime_series 
                 (titel, original_titel, beschreibung, erscheinungsjahr, status, 
-                studio, regisseur, aniworld_url, cover_url, cover_data, letzte_aktualisierung)
+                studio, regisseur, aniworld_url, cover_url, cover_data, aktualisiert_am)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """
             params = (
@@ -116,7 +116,7 @@ class AnimeRepository(BaseRepository):
                     regisseur = %s, 
                     aniworld_url = %s, 
                     cover_url = %s,
-                    letzte_aktualisierung = NOW()
+                    aktualisiert_am = NOW()
                 WHERE series_id = %s
             """
             params = (
@@ -150,7 +150,7 @@ class AnimeRepository(BaseRepository):
         query = """
             SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
                    status, studio, regisseur, aniworld_url, cover_url, 
-                   letzte_aktualisierung
+                   aktualisiert_am
             FROM anime_series
             WHERE series_id = %s
         """
@@ -168,7 +168,7 @@ class AnimeRepository(BaseRepository):
                 regisseur=row['regisseur'],
                 aniworld_url=row['aniworld_url'],
                 cover_url=row['cover_url'],
-                letzte_aktualisierung=row['letzte_aktualisierung']
+                aktualisiert_am=row['aktualisiert_am']
             )
         
         return None
@@ -186,7 +186,7 @@ class AnimeRepository(BaseRepository):
         query = """
             SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
                    status, studio, regisseur, aniworld_url, cover_url, 
-                   letzte_aktualisierung
+                   aktualisiert_am
             FROM anime_series
             WHERE aniworld_url = %s
         """
@@ -204,7 +204,7 @@ class AnimeRepository(BaseRepository):
                 regisseur=row['regisseur'],
                 aniworld_url=row['aniworld_url'],
                 cover_url=row['cover_url'],
-                letzte_aktualisierung=row['letzte_aktualisierung']
+                aktualisiert_am=row['aktualisiert_am']
             )
         
         return None
@@ -219,7 +219,7 @@ class AnimeRepository(BaseRepository):
         query = """
             SELECT series_id, titel, original_titel, beschreibung, erscheinungsjahr, 
                    status, studio, regisseur, aniworld_url, cover_url, 
-                   letzte_aktualisierung
+                   aktualisiert_am
             FROM anime_series
             ORDER BY titel
         """
@@ -239,7 +239,7 @@ class AnimeRepository(BaseRepository):
                 regisseur=row['regisseur'],
                 aniworld_url=row['aniworld_url'],
                 cover_url=row['cover_url'],
-                letzte_aktualisierung=row['letzte_aktualisierung']
+                aktualisiert_am=row['aktualisiert_am']
             ))
         
         return animes
@@ -372,6 +372,18 @@ class SeasonRepository(BaseRepository):
                 aniworld_url=result['aniworld_url']
             ))
         return season_list
+    
+    def find_by_anime_id(self, series_id: int) -> List[Season]:
+        """
+        Findet alle Staffeln eines Anime anhand der Anime-ID
+        
+        Args:
+            series_id: Die ID der Anime-Serie
+            
+        Returns:
+            Liste der Staffeln für den Anime
+        """
+        return self.find_by_series_id(series_id)
     
     def find_by_url(self, aniworld_url: str) -> Optional[Season]:
         """

@@ -204,6 +204,27 @@
   - Entfernen der debug-Logging-Ausgaben nach erfolgreicher Bestätigung der Funktionalität
   - Implementierung einer Queue für die asynchrone Verarbeitung von langen Anime-Listen
 
+## [2024-07-25 17:30] Behebung des fehlenden Repository-Methodenfehlers
+
+- **Geänderte Dateien**:
+  - `src/aniworld/database/repositories.py` - Hinzufügung der fehlenden Repository-Methode `find_by_anime_id`
+
+- **Zusammenfassung der Änderungen**:
+  - Die fehlende Methode `find_by_anime_id` wurde in der `SeasonRepository`-Klasse implementiert
+  - Die Methode ist ein Alias für die bereits bestehende `find_by_series_id` Methode, da beide identisch funktionieren
+  - Dieser Fehler verursachte die Fehlermeldung "'SeasonRepository' object has no attribute 'find_by_anime_id'" beim Abrufen von Staffeln eines Anime
+
+- **Aktueller Status**:
+  - Der Fehler beim Abrufen von Anime-Staffeln wurde behoben
+  - Über die CLI-Befehle `--db-anime-info` können nun vollständige Anime-Informationen einschließlich Staffeln und Episoden abgerufen werden
+  - Alle notwendigen Repository-Methoden für die vollständige Datenbankfunktionalität sind jetzt implementiert
+
+- **Nächste Schritte**:
+  - Umfassende Tests der Anime-Informationsabfrage mit verschiedenen Anime
+  - Vereinheitlichung der Namenskonventionen im Repository-Layer (`series_id` vs. `anime_id`)
+  - Optimierung der Datenbankabrufe für komplexe Datensätze
+  - Entwicklung zusätzlicher Abfragefunktionen für spezifische Anwendungsfälle
+
 ## Glossar
 
 ## Meilensteine 
