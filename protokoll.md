@@ -27,6 +27,14 @@
   - Mediathek-Funktionen (Bewertungen, Wiedergabestatus, Tags)
 - Nächste Schritte: Integration der Datenbank in die AniWorld-Anwendung
 
+## [2024-07-20 20:35] GitHub-Update
+- Aktion: Hinzufügen der neuen Dateien zum Git-Repository
+- Aktion: Git-Konfiguration für lokale Benutzerdaten
+- Aktion: Commit mit Titel "[Datenbank]: MySQL-Schema für Mediathek und VPN-Integration erstellt"
+- Aktion: Push auf den GitHub-Server
+- Ergebnis: Erfolgreiches Update des GitHub-Repositories mit Datenbankschema und Projektprotokoll
+- Nächste Schritte: Entwicklung der Python-Schnittstelle zur Datenbankanbindung
+
 ## Glossar
 
 ## Meilensteine 
