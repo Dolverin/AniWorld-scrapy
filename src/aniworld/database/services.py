@@ -93,6 +93,18 @@ class AnimeService:
             logging.info(f"Neue Anime-Serie angelegt: {titel} (ID: {anime.series_id})")
         return anime
     
+    def get_anime_by_id(self, anime_id: int) -> Optional[AnimeSeries]:
+        """
+        Findet eine Anime-Serie anhand ihrer ID
+        
+        Args:
+            anime_id: ID der Anime-Serie
+            
+        Returns:
+            AnimeSeries-Objekt oder None, wenn nicht gefunden
+        """
+        return self.anime_repo.find_by_id(anime_id)
+    
     def get_or_create_season(self, series_id: int, staffel_nummer: int, aniworld_url: str = None) -> Season:
         """
         Findet eine Staffel anhand der Serie und Staffelnummer oder erstellt sie, wenn sie nicht existiert
@@ -513,7 +525,7 @@ class StatisticsService:
         Returns:
             Anzahl der Episoden
         """
-        query = "SELECT COUNT(*) FROM episoden"
+        query = "SELECT COUNT(*) FROM episodes"
         result = self.episode_repo._execute_query_one(query)
         return result[0] if result else 0
     
@@ -545,7 +557,7 @@ class StatisticsService:
                    COUNT(e.episode_id) as episode_count
             FROM anime_series a
             JOIN seasons s ON a.series_id = s.series_id
-            JOIN episoden e ON s.season_id = e.season_id
+            JOIN episodes e ON s.season_id = e.season_id
             GROUP BY a.series_id
             ORDER BY episode_count DESC
             LIMIT %s
@@ -587,7 +599,7 @@ class StatisticsService:
             SELECT d.download_id, d.status, d.zieldatei, d.sprache, d.provider,
                    e.titel as episode_titel, s.titel as season_titel, a.titel as anime_titel
             FROM downloads d
-            JOIN episoden e ON d.episode_id = e.episode_id
+            JOIN episodes e ON d.episode_id = e.episode_id
             JOIN seasons s ON e.season_id = s.season_id
             JOIN anime_series a ON s.series_id = a.series_id
             ORDER BY d.download_datum DESC

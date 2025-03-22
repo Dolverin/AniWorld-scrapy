@@ -1005,9 +1005,10 @@ def handle_database_commands(args):
         try:
             # Prüfen, ob es eine ID oder URL ist
             if anime_identifier.isdigit():
-                # Nach ID suchen (nicht implementiert, aber könnte hinzugefügt werden)
-                print(f"Suche nach Anime mit ID {anime_identifier} ist noch nicht implementiert.")
-                return True
+                # Nach ID suchen
+                from aniworld.database.services import AnimeService
+                service = AnimeService()
+                anime = service.get_anime_by_id(int(anime_identifier))
             else:
                 # Nach URL suchen
                 anime = db.get_anime_by_url(anime_identifier)
@@ -1032,8 +1033,8 @@ def handle_database_commands(args):
             print(f"AniWorld URL: {anime.aniworld_url}")
             if anime.cover_url:
                 print(f"Cover URL: {anime.cover_url}")
-            if anime.letzte_aktualisierung:
-                print(f"Letzte Aktualisierung: {anime.letzte_aktualisierung}")
+            if anime.aktualisiert_am:
+                print(f"Letzte Aktualisierung: {anime.aktualisiert_am}")
                 
             # Staffeln abrufen
             # Angenommen, es gibt eine Methode, um alle Staffeln eines Anime abzurufen

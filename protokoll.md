@@ -267,4 +267,32 @@
   - Optimierung der Performance bei großen Serien mit vielen Staffeln/Episoden
   - Überprüfung aller Datenbank-Funktionen mit den gesammelten Daten
 
+## [2025-03-22 16:53] Vervollständigung der Anime-ID-Abfrage und erfolgreiche Staffel/Episode-Extraktion
+
+- Dateien geändert: 
+  - `src/aniworld/search.py`
+  - `src/aniworld/database/services.py`
+  - `src/aniworld/__main__.py`
+
+- Folgende Verbesserungen wurden implementiert:
+  - Die HTML-Extraktionslogik für Staffeln und Episoden wurde vollständig überarbeitet, um die aktuelle Website-Struktur zu unterstützen
+  - Parser nutzt jetzt die Attribute `data-season-id` und `data-episode-id` statt veralteter Container-Klassen
+  - Neue Methode `get_anime_by_id` im AnimeService zur Abfrage eines Anime nach ID
+  - Aktivierung der `--db-anime-info`-Funktion zur Abfrage von Animes nach ID
+
+- Tests wurden durchgeführt:
+  - Extraktion funktioniert jetzt korrekt für verschiedene Anime (getestet mit Naruto und One Piece)
+  - Alle Staffeln und Episoden werden korrekt erkannt, sortiert und gespeichert
+  - Die CLI-Abfrage von Anime-Details (inkl. Staffeln und Episoden) funktioniert sowohl mit URL als auch mit ID
+
+- Aktueller Status:
+  - Die Scraping-Funktionalität für Staffeln und Episoden ist vollständig funktionsfähig
+  - Alle notwendigen Datenbankabfragen sind implementiert
+  - Das System kann sowohl Anime-Listen als auch detaillierte Anime-Informationen anzeigen
+
+- Nächste Schritte:
+  - Performance-Optimierung bei großen Datenmengen
+  - Mögliche Erweiterung um mehr Detailinformationen zu Episoden
+  - Implementierung zusätzlicher Filterfunktionen für die Anzeige
+
 ## Glossar 
