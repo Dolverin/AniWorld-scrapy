@@ -383,4 +383,29 @@
   - Überprüfung der Datenqualität in der Datenbank
   - Erwägung weiterer Verbesserungen der Benutzerschnittstelle
 
+## [2025-03-22 17:45] Behebung der 403 Forbidden-Fehler bei der Suche
+
+- Datei geändert: `src/aniworld/globals.py`
+
+- Problem:
+  - Die Website blockiert direkte HTTP-Anfragen mit dem Fehler "403 Forbidden"
+  - Dies betrifft insbesondere die AJAX-Suchanfragen (`seriesSearch`)
+  - Ursache ist vermutlich eine Anti-Scraping-Maßnahme der Website
+  - Fehler trat auf bei: `Request to https://aniworld.to/ajax/seriesSearch?keyword=Solo%20Leveling failed: 403 Client Error`
+  
+- Lösung:
+  - Aktivierung des Playwright-Modus als Standard (`DEFAULT_USE_PLAYWRIGHT = True`)
+  - Playwright emuliert einen echten Browser und umgeht damit die meisten Anti-Scraping-Maßnahmen
+  - Festlegung eines neueren, spezifischen User-Agent-Strings anstelle eines zufälligen
+
+- Aktueller Status:
+  - Die Suchfunktion sollte jetzt wieder in der Lage sein, die Website-Blockade zu umgehen
+  - Playwright wird automatisch für alle Anfragen verwendet
+  - Die Emulation eines echten Browsers ermöglicht zuverlässigeren Zugriff auf die API
+
+- Nächste Schritte:
+  - Test der Suchfunktion mit verschiedenen Suchbegriffen
+  - Überwachung der Performance, da Playwright langsamer sein kann als direkte HTTP-Anfragen
+  - Implementierung von Fallback-Mechanismen für den Fall, dass Playwright nicht verfügbar ist
+
 ## Glossar 

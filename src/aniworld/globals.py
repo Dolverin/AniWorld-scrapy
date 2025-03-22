@@ -19,7 +19,7 @@ DEFAULT_KEEP_WATCHING = False
 DEFAULT_ONLY_DIRECT_LINK = False
 DEFAULT_ONLY_COMMAND = False
 DEFAULT_PROXY = None
-DEFAULT_USE_PLAYWRIGHT = False
+DEFAULT_USE_PLAYWRIGHT = True
 DEFAULT_TERMINAL_SIZE = (90, 32)
 
 log_colors = {
@@ -124,7 +124,7 @@ USER_AGENTS = [
     "Gecko/20100101 Firefox/128."
 ]
 
-DEFAULT_USER_AGENT = random.choice(USER_AGENTS)
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 
 
 class ExitOnError(logging.Handler):
