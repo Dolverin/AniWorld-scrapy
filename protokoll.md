@@ -295,4 +295,25 @@
   - Mögliche Erweiterung um mehr Detailinformationen zu Episoden
   - Implementierung zusätzlicher Filterfunktionen für die Anzeige
 
+## [2025-03-22 17:10] Verbesserung der Anime- und Episodendaten-Extraktion
+
+- Datei geändert: `src/aniworld/search.py`
+
+- Folgende Verbesserungen wurden implementiert:
+  - Extraktion der tatsächlichen Episodentitel aus der Episodentabelle statt nur "Staffel X Episode Y" zu verwenden
+  - Beispiel: "Ich bin es bereits gewohnt" statt "Staffel 1 Episode 1"
+  - Verbesserte Extraktion des Cover-Bilds mit mehreren Fallback-Optionen
+  - Hinzufügung der Extraktion von Anime-Genres
+  - Verbessertes Debugging mit Ausgabe der extrahierten Episodentitel
+
+- Aktueller Status:
+  - Die Datenbank enthält nun die korrekten und vollständigen Informationen zu Animes
+  - Episodentitel werden korrekt extrahiert und gespeichert
+  - Zusätzliche Metadaten (Genres, Cover) werden zuverlässig erfasst
+
+- Nächste Schritte:
+  - Testen der Extraktion bei verschiedenen Anime-Typen (Filme, OVAs)
+  - Prüfen der Datenqualität in der Datenbank
+  - Ergänzen der Benutzerschnittstelle zur besseren Anzeige der Metadaten
+
 ## Glossar 
