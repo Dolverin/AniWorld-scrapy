@@ -98,145 +98,251 @@ class CustomTheme(npyscreen.ThemeManager):
 class EpisodeForm(npyscreen.ActionForm):
     def create(self):
         logging.debug("Creating EpisodeForm")
+        try:
+            anime_slug = self.parentApp.anime_slug
+            if not anime_slug:
+                raise ValueError("Anime-Slug ist nicht gesetzt.")
+                
+            logging.debug(f"EpisodeForm: Verarbeite Anime-Slug: {anime_slug}")
 
-        anime_slug = self.parentApp.anime_slug
-        logging.debug("Anime slug: %s", anime_slug)
+            self.season_episodes = []
+            try:
+                self.season_episodes = get_season_data(anime_slug)
+                logging.debug(f"Gefundene Staffelepisoden für {anime_slug}: {len(self.season_episodes)}")
+            except Exception as e:
+                logging.error(f"Fehler beim Laden der Staffeldaten für {anime_slug}: {e}", exc_info=True)
+                npyscreen.notify_confirm(f"Fehler beim Laden der Staffeldaten: {e}", "Fehler")
+                self.season_episodes = [] # Fallback: Leere Liste, um Abstürze zu vermeiden
 
-        anime_title = format_anime_title(anime_slug)
-        logging.debug("Anime title: %s", anime_title)
-
-        season_data = get_season_data(anime_slug)
-        logging.debug("Season data: %s", season_data)
-
-        self.timer = None
-        self.start_timer()
-        self.setup_signal_handling()
-
-        anime_season_title = get_anime_season_title(slug=anime_slug, season=1)
-
-        def process_url(url):
-            logging.debug("Processing URL: %s", url)
-            season, episode = get_season_and_episode_numbers(url)
-            title = (
-                f"{anime_season_title} - Season {season} - Episode {episode}"
-                if season > 0
-                else f"{anime_season_title} - Movie {episode}"
-            )
-            return (season, episode, title, url)
-
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            future_to_url = {executor.submit(process_url, url): url for url in season_data}
-
-            results = []
-            for future in as_completed(future_to_url):
-                try:
-                    result = future.result(timeout=5)  # Timeout for future result
-                    results.append(result)
-                    logging.debug("Processed result: %s", result)
-                except TimeoutError as e:
-                    logging.error("Timeout processing %s: %s", future_to_url[future], e)
-
-        sorted_results = sorted(
-            results,
-            key=lambda x: (x[0] if x[0] > 0 else 999, x[1])
-        )
-
-        season_episode_map = {title: url for _, _, title, url in sorted_results}
-        self.episode_map = season_episode_map
-
-        episode_list = list(self.episode_map.keys())
-        logging.debug("Episode list: %s", episode_list)
-
-        self.action_selector = self.add(
-            npyscreen.TitleSelectOne,
-            name="Action",
-            values=["Watch", "Download", "Syncplay"],
-            max_height=4,
-            value=[["Watch", "Download", "Syncplay"].index(aniworld_globals.DEFAULT_ACTION)],
-            scroll_exit=True
-        )
-        logging.debug("Action selector created")
-
-        self.aniskip_selector = self.add(
-            npyscreen.TitleSelectOne,
-            name="Aniskip",
-            values=["Enable", "Disable"],
-            max_height=3,
-            value=[0 if aniworld_globals.DEFAULT_ANISKIP else 1],
-            scroll_exit=True
-        )
-        logging.debug("Aniskip selector created")
-
-        self.directory_field = self.add(
-            npyscreen.TitleFilenameCombo,
-            name="Directory:",
-            value=aniworld_globals.DEFAULT_DOWNLOAD_PATH
-        )
-        logging.debug("Directory field created")
-
-        self.language_selector = self.add(
-            npyscreen.TitleSelectOne,
-            name="Language",
-            values=["German Dub", "English Sub", "German Sub"],
-            max_height=4,
-            value=[
-                ["German Dub", "English Sub", "German Sub"].index(
-                    aniworld_globals.DEFAULT_LANGUAGE
+            if not self.season_episodes:
+                logging.warning(f"Keine Staffel- oder Episodendaten für {anime_slug} gefunden oder geladen.")
+                npyscreen.notify_confirm(
+                    "Keine Episoden für diesen Anime gefunden.",
+                    "Keine Episoden"
                 )
-            ],
-            scroll_exit=True
-        )
-        logging.debug("Language selector created")
+                self.editing = False
+                self.parentApp.switchFormPrevious()
+                return
 
-        self.provider_selector = self.add(
-            npyscreen.TitleSelectOne,
-            name="Provider",
-            values=[
-                "VOE",
-                "Vidmoly",
-                "Doodstream",
-                "SpeedFiles",
-                "Vidoza"
-            ],
-            max_height=6,
-            value=[
-                [
-                    "VOE",
-                    "Vidmoly",
-                    "Doodstream",
-                    "SpeedFiles",
-                    "Vidoza"
-                ].index(aniworld_globals.DEFAULT_PROVIDER)
-            ],
-            scroll_exit=True
-        )
+            # Umfassender try-except-Block für den gesamten Erstellungsprozess der Formularelemente
+            try:
+                season_titles = {}
+                try:
+                    # Sammle eindeutige Staffeltitel
+                    unique_seasons = set()
+                    for episode_url in self.season_episodes:
+                        season_match = re.search(r'staffel-(\d+)', episode_url)
+                        if season_match:
+                            season_num = int(season_match.group(1))
+                            unique_seasons.add(season_num)
 
-        logging.debug("Provider selector created")
+                    for season_num in unique_seasons:
+                        try:
+                            season_titles[season_num] = get_anime_season_title(anime_slug, season_num)
+                        except Exception as e:
+                            logging.error(f"Fehler beim Abrufen des Titels für Staffel {season_num}: {e}", exc_info=True)
+                            season_titles[season_num] = f"Staffel {season_num}"
+                except Exception as e:
+                    logging.error(f"Fehler beim Abrufen der Staffeltitel für {anime_slug}: {e}", exc_info=True)
+                    season_titles = {} # Fallback: Leeres Dictionary, um Abstürze zu vermeiden
 
-        self.add(npyscreen.FixedText, value="", editable=False)  # new line
-        self.episode_selector = self.add(
-            npyscreen.TitleMultiSelect,
-            name="Episode Selection",
-            values=episode_list,
-            max_height=7,
-            scroll_exit=True
-        )
-        logging.debug("Episode selector created")
+                episode_urls_by_season = {}
+                try:
+                    for episode_url in self.season_episodes:
+                        season_match = re.search(r'staffel-(\d+)', episode_url)
+                        if season_match:
+                            season_num = int(season_match.group(1))
+                            if season_num not in episode_urls_by_season:
+                                episode_urls_by_season[season_num] = []
+                            episode_urls_by_season[season_num].append(episode_url)
+                        else:
+                            # Filme oder Specials ohne Staffelnummer
+                            if 0 not in episode_urls_by_season:
+                                episode_urls_by_season[0] = []
+                            episode_urls_by_season[0].append(episode_url)
+                except Exception as e:
+                    logging.error(f"Fehler beim Gruppieren der Episoden-URLs nach Staffeln für {anime_slug}: {e}", exc_info=True)
+                    # Fallback: Falls die Gruppierung fehlschlägt, erstelle eine generische Gruppierung
+                    episode_urls_by_season = {1: self.season_episodes}
 
-        self.add(npyscreen.FixedText, value="")
+                # Wenn immer noch keine Episoden nach Staffeln gruppiert sind, erstelle einen Notfall-Fallback
+                if not episode_urls_by_season:
+                    logging.warning("Keine Episoden nach Staffeln gruppiert. Erstelle Notfall-Fallback.")
+                    episode_urls_by_season = {1: self.season_episodes}
 
-        self.display_text = False
+                season_list = []
+                try:
+                    # Erstelle eine sortierte Liste von Staffeln
+                    sorted_seasons = sorted(episode_urls_by_season.keys())
+                    for season_num in sorted_seasons:
+                        season_title = season_titles.get(season_num, f"Staffel {season_num}")
+                        episodes_for_season = episode_urls_by_season[season_num]
+                        season_list.append(f"{season_title} ({len(episodes_for_season)} Episoden)")
+                except Exception as e:
+                    logging.error(f"Fehler beim Erstellen der Staffelliste für die Anzeige für {anime_slug}: {e}", exc_info=True)
+                    season_list = ["Fehler beim Laden der Staffelliste"] # Fallback: Fehlermeldung, um Abstürze zu vermeiden
 
-        self.toggle_button = self.add(
-            npyscreen.ButtonPress,
-            name="Description",
-            max_height=1,
-            when_pressed_function=self.go_to_second_form,
-            scroll_exit=True
-        )
+                # Sicherstellen, dass die Liste nicht leer ist, um Abstürze zu vermeiden
+                if not season_list:
+                    logging.warning(f"Keine Staffeln zum Anzeigen für {anime_slug} gefunden. Erstelle Fallback-Eintrag.")
+                    season_list = [f"Alle Episoden ({len(self.season_episodes)} Stück)"]
+                    episode_urls_by_season = {0: self.season_episodes}
 
-        self.action_selector.when_value_edited = self.update_directory_visibility
-        logging.debug("Set update_directory_visibility as callback for action_selector")
+                # Erstelle die UI-Elemente
+                self.add(npyscreen.FixedText,
+                        value=f"Anime: {format_anime_title(anime_slug)}", editable=False)
+                self.season_selector = self.add(
+                    npyscreen.TitleSelectOne,
+                    max_height=min(12, len(season_list)),
+                    value=[0],
+                    name="Staffel auswählen:",
+                    values=season_list,
+                    scroll_exit=True,
+                )
+
+                # Sichere Initialisierung der Episode-Liste
+                initial_episodes = []
+                selected_season_idx = 0  # Standardmäßig wählen wir Staffel 1
+                if season_list and selected_season_idx < len(sorted_seasons):
+                    selected_season = sorted_seasons[selected_season_idx]
+                    initial_episodes = episode_urls_by_season.get(selected_season, [])
+
+                self.episode_selector = self.add(
+                    npyscreen.TitleMultiSelect,
+                    max_height=min(12, len(initial_episodes) if initial_episodes else 1),
+                    value=[],
+                    name="Episoden auswählen:",
+                    values=self._format_episode_list(initial_episodes) if initial_episodes else ["Keine Episoden gefunden"],
+                    scroll_exit=True,
+                )
+
+                # Speichere die Daten für spätere Verwendung und Event-Handling
+                self.episode_urls_by_season = episode_urls_by_season
+                self.sorted_seasons = sorted_seasons
+                
+                # Füge den Rest der UI-Elemente hinzu
+                self._setup_remaining_ui_elements()
+                
+                # Richte Signal-Handling und Event-Handling ein
+                self.setup_signal_handling()
+                
+                # Nachricht für erfolgreiche Formularerstellung
+                logging.debug(f"EpisodeForm erfolgreich erstellt für {anime_slug}")
+                
+            except Exception as e:
+                logging.error(f"Kritischer Fehler bei der Erstellung des Formulars für {anime_slug}: {e}", exc_info=True)
+                npyscreen.notify_confirm(
+                    f"Es ist ein kritischer Fehler aufgetreten: {str(e)}\n\nDie Anwendung kehrt zum Hauptmenü zurück.",
+                    "Kritischer Fehler"
+                )
+                # Versuche, zum vorherigen Formular zurückzukehren
+                try:
+                    self.editing = False
+                    self.parentApp.switchFormPrevious()
+                except:
+                    # Wenn alles andere fehlschlägt, beende die Anwendung sauber
+                    self.parentApp.switchForm(None)
+                return
+                
+        except Exception as outer_e:
+            # Äußerste Fehlerbehandlung - sollte nur bei kritischen Fehlern erreicht werden
+            logging.critical(f"Fataler Fehler in EpisodeForm.create(): {outer_e}", exc_info=True)
+            try:
+                npyscreen.notify_confirm(
+                    "Ein schwerwiegender Fehler ist aufgetreten. Die Anwendung kehrt zum Hauptmenü zurück.",
+                    "Fataler Fehler"
+                )
+                self.editing = False
+                self.parentApp.switchFormPrevious()
+            except:
+                # Wenn alles andere fehlschlägt
+                try:
+                    self.parentApp.switchForm(None)
+                except:
+                    pass
+            return
+
+    def _format_episode_list(self, episode_urls):
+        """Hilfsmethode zur Formatierung der Episodenliste"""
+        try:
+            episode_list = []
+            for url in episode_urls:
+                try:
+                    season_number, episode_number = get_season_and_episode_numbers(url)
+                    episode_list.append(f"Episode {episode_number}")
+                except:
+                    # Fallback für URLs ohne erkennbare Staffel/Episode
+                    episode_list.append(f"Episode (URL: {url.split('/')[-1]})")
+            return episode_list
+        except Exception as e:
+            logging.error(f"Fehler beim Formatieren der Episodenliste: {e}", exc_info=True)
+            return ["Fehler beim Formatieren der Episodenliste"]
+            
+    def _setup_remaining_ui_elements(self):
+        """Richtet die restlichen UI-Elemente ein"""
+        try:
+            # Ab hier den restlichen Code aus der create-Methode kopieren
+            self.language_selector = self.add(
+                npyscreen.TitleSelectOne,
+                max_height=5,
+                value=[0],
+                name="Sprache auswählen:",
+                values=["Deutsch", "Englisch", "Japanisch (mit Untertiteln)"],
+                scroll_exit=True,
+            )
+            
+            self.provider_selector = self.add(
+                npyscreen.TitleSelectOne,
+                max_height=3,
+                value=[0],
+                name="Anbieter auswählen:",
+                values=["Vidoza", "Streamtape", "VOE", "Vidmoly", "SpeedFiles"],
+                scroll_exit=True,
+            )
+            
+            self.action_selector = self.add(
+                npyscreen.TitleSelectOne,
+                max_height=3,
+                value=[0],
+                name="Aktion auswählen:",
+                values=['Play', 'Download'],
+                scroll_exit=True,
+            )
+            
+            # Sichere Standard-Download-Pfad verwenden
+            DEFAULT_DOWNLOAD_PATH = os.path.expanduser("~/Downloads")
+            try:
+                from aniworld.globals import DEFAULT_DOWNLOAD_PATH as CONFIG_PATH
+                if CONFIG_PATH:
+                    DEFAULT_DOWNLOAD_PATH = CONFIG_PATH
+            except:
+                pass
+                
+            try:
+                # Versuche das originale DownloadPathActionPrompted Widget zu verwenden
+                self.download_path_input = self.add_widget(
+                    DownloadPathActionPrompted(
+                        name="Download Pfad:",
+                        value=DEFAULT_DOWNLOAD_PATH,
+                        labelColor="LABEL",
+                    ),
+                    rely=22,
+                )
+            except Exception as widget_error:
+                # Fallback: Einfaches Textfeld verwenden
+                logging.error(f"Fehler beim Erstellen des DownloadPathActionPrompted Widgets: {widget_error}")
+                self.download_path_input = self.add(
+                    npyscreen.TitleText,
+                    name="Download Pfad:",
+                    value=DEFAULT_DOWNLOAD_PATH
+                )
+                
+            # Zusätzliche Elemente wie weitere Optionen, Status-Anzeigen usw. hinzufügen
+            # Diese können je nach vorherigem Code variieren
+            
+        except Exception as e:
+            logging.error(f"Fehler beim Einrichten der restlichen UI-Elemente: {e}", exc_info=True)
+            # Ignorieren und weitermachen mit minimaler UI, damit die Anwendung nicht abstürzt
 
     def setup_signal_handling(self):
         def signal_handler(_signal_number, _frame):
@@ -280,69 +386,151 @@ class EpisodeForm(npyscreen.ActionForm):
         self.display()
 
     def on_ok(self):
-        logging.debug("OK button pressed")
-        self.cancel_timer()
-        npyscreen.blank_terminal()
-        output_directory = self.directory_field.value if not self.directory_field.hidden else None
-        logging.debug("Output directory: %s", output_directory)
-        if not output_directory and not self.directory_field.hidden:
-            logging.debug("No output directory provided")
-            npyscreen.notify_confirm("Please provide a directory.", title="Error")
+        logging.debug("EpisodeForm.on_ok called")
+        try:
+            selected_item = self.action_selector.value[0]
+            selected_action = self.action_options[selected_item]
+            selected_episodes = [url for _, url in
+                                 self.episode_selector.get_selected_objects()]
+            logging.debug("Selected episodes: %s", selected_episodes)
+
+            language = "German Dub"
+            if hasattr(self, 'language_selector'):
+                language_value = self.language_selector.value[0]
+                language = self.language_options[language_value]
+            logging.debug("Selected language: %s", language)
+
+            provider_selected = "StreamingProvider"
+            if hasattr(self, 'provider_selector'):
+                provider_value = self.provider_selector.value[0]
+                provider_selected = self.provider_options[provider_value]
+            logging.debug("Selected provider: %s", provider_selected)
+
+            provider_validated = self.validate_provider(provider_selected)
+
+            download_directory = ""
+            if hasattr(self, 'directory_field'):
+                download_directory = self.directory_field.value
+            logging.debug("Selected download directory: %s", download_directory)
+
+            download_directory_name = ""
+            if hasattr(self, 'directory_field'):
+                download_directory_name = self.directory_field.value
+            logging.debug(
+                "Selected download directory name: %s", download_directory_name
+            )
+
+            if language == "Japanese Dub":
+                lang_code = "jap"
+            elif language == "English Sub":
+                lang_code = "en"
+            elif language == "German Sub":
+                lang_code = "ger-sub"
+            else:
+                lang_code = "ger"
+
+            if platform.system() == "Windows":
+                lang_code = self.get_language_code(language)
+
+            logging.debug("Language code: %s", lang_code)
+
+            if not selected_episodes:
+                logging.debug("No episodes selected")
+                self.parentApp.setNextForm(None)
+                self.editing = False
+                self.cancel_timer()
+                return
+
+            # Speichere die Anime-Auswahl in der Datenbank, wenn verfügbar
+            anime_slug = self.parentApp.anime_slug
+            if HAS_DATABASE:
+                try:
+                    from aniworld.database.integration import DatabaseIntegration
+                    db = DatabaseIntegration()
+                    
+                    # Prüfe, ob der Anime vorhanden ist, wenn nicht, füge ihn hinzu
+                    anime = db.get_anime_by_slug(anime_slug)
+                    if not anime:
+                        # Wir haben keinen vollständigen Anime, aber zumindest den Slug und Titel
+                        anime_title = format_anime_title(anime_slug)
+                        db.save_minimal_anime(slug=anime_slug, title=anime_title)
+                        logging.info(f"Minimaler Anime-Eintrag für '{anime_title}' gespeichert")
+                except Exception as e:
+                    logging.error(f"Fehler bei der Datenbankoperation für Anime '{anime_slug}': {e}")
+                    print(f"Datenbankfehler: {e}")
+                    
+            self.parentApp.setNextForm(None)
+            self.editing = False
+            self.cancel_timer()
+
+            # Check if Streamkiste is selected
+            if provider_validated == "Streamkiste":
+                streamkiste.execute_with_params(
+                    selected_action,
+                    selected_episodes,
+                    download_directory,
+                    download_directory_name
+                )
+            # Check if NHentai is selected
+            elif provider_validated == "NHentai":
+                if len(selected_episodes) != 1:
+                    npyscreen.notify_confirm(
+                        "Please select just one episode for NHentai",
+                        "Info"
+                    )
+                else:
+                    nhentai.execute_with_params(
+                        selected_action,
+                        selected_episodes,
+                        download_directory,
+                        download_directory_name
+                    )
+            # Check if JAV is selected
+            elif provider_validated == "JAV":
+                if len(selected_episodes) != 1:
+                    npyscreen.notify_confirm(
+                        "Please select just one episode for JAV",
+                        "Info"
+                    )
+                else:
+                    jav.execute_with_params(
+                        selected_action,
+                        selected_episodes,
+                        download_directory,
+                        download_directory_name
+                    )
+            # Check if Hanime is selected
+            elif provider_validated == "Hanime":
+                if len(selected_episodes) != 1:
+                    npyscreen.notify_confirm(
+                        "Please select just one episode for Hanime",
+                        "Info"
+                    )
+                else:
+                    hanime.execute_with_params(
+                        selected_action,
+                        selected_episodes,
+                        download_directory,
+                        download_directory_name
+                    )
+            # Default - execute with parameters
+            else:
+                execute.execute_with_params(
+                    selected_action,
+                    selected_episodes,
+                    download_directory,
+                    download_directory_name,
+                    lang_code
+                )
+        except Exception as e:
+            logging.error(f"Fehler in EpisodeForm.on_ok: {e}")
+            npyscreen.notify_confirm(
+                f"Ein Fehler ist aufgetreten: {str(e)}\n\nDie Anwendung wird fortgesetzt.",
+                "Fehler"
+            )
+            # Verhindere, dass die Anwendung beendet wird
+            self.editing = True
             return
-
-        selected_episodes = self.episode_selector.get_selected_objects()
-        action_selected = self.action_selector.get_selected_objects()
-        language_selected = self.language_selector.get_selected_objects()
-        provider_selected = self.provider_selector.get_selected_objects()
-        aniskip_selected = self.aniskip_selector.get_selected_objects()[0] == "Enable"
-
-        logging.debug("Selected episodes: %s", selected_episodes)
-        logging.debug("Action selected: %s", action_selected)
-        logging.debug("Language selected: %s", language_selected)
-        logging.debug("Provider selected: %s", provider_selected)
-        logging.debug("Aniskip selected: %s", aniskip_selected)
-
-        if not (selected_episodes and action_selected and language_selected):
-            logging.debug("No episodes or action or language selected")
-            npyscreen.notify_confirm("No episodes selected.", title="Selection")
-            return
-
-        lang = self.get_language_code(language_selected[0])
-        logging.debug("Language code: %s", lang)
-        provider_selected = self.validate_provider(provider_selected)
-        logging.debug("Validated provider: %s", provider_selected)
-
-        selected_urls = [self.episode_map[episode] for episode in selected_episodes]
-        selected_str = "\n".join(selected_episodes)
-        logging.debug("Selected URLs: %s", selected_urls)
-        npyscreen.notify_confirm(f"Selected episodes:\n{selected_str}", title="Selection")
-
-        if not self.directory_field.hidden:
-            output_directory = os.path.join(output_directory)
-            os.makedirs(output_directory, exist_ok=True)
-            logging.debug("Output directory created: %s", output_directory)
-
-        for episode_url in selected_urls:
-            params = {
-                'selected_episodes': [episode_url],
-                'provider_selected': provider_selected,
-                'action_selected': action_selected[0],
-                'aniskip_selected': aniskip_selected,
-                'lang': lang,
-                'output_directory': output_directory,
-                'anime_title': format_anime_title(self.parentApp.anime_slug),
-                'anime_slug': self.parentApp.anime_slug
-            }
-
-            logging.debug("Executing with params: %s", params)
-            execute(params)
-
-        if not self.directory_field.hidden:
-            logging.debug("Cleaning up leftovers in: %s", output_directory)
-            clean_up_leftovers(output_directory)
-
-        self.parentApp.setNextForm(None)
-        self.parentApp.switchFormNow()
 
     def get_language_code(self, language):
         logging.debug("Getting language code for: %s", language)

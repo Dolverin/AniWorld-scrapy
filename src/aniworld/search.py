@@ -142,25 +142,14 @@ def save_anime_data_from_html(
     """
     module_log.debug(f"Starte Extraktion und Speicherung für: {anime_link}")
     
-    should_close_session = False
-    if session is None:
-        from aniworld.database import SessionLocal
-        try:
-            module_log.debug("Erstelle neue Datenbankverbindung")
-            session = SessionLocal()
-            should_close_session = True
-        except Exception as e:
-            module_log.error(f"Fehler beim Erstellen der Datenbankverbindung: {e}")
-            module_log.error(traceback.format_exc())
-            return None
-
     try:
         soup_content = soup.prettify()
         if "Wartungsarbeiten" in soup_content or "Wir aktualisieren" in soup_content:
             module_log.error(f"Wartungsarbeiten oder Update der Seite: {anime_link}")
             return None
 
-        anime_data = {}
+        # Erstelle das Dictionary im Format für AnimeService.save_from_scraper_data
+        anime_data = {"url": anime_link}
 
         # Extract anime title
         anime_title_element = soup.select_one("h1.seriesCoverMainTitle")
@@ -203,7 +192,8 @@ def save_anime_data_from_html(
             if cover_images and cover_images[0].get("src"):
                 cover_image = cover_images[0]["src"]
         
-        anime_data["cover_image"] = cover_image
+        # Korrekter Schlüssel für AnimeService ist cover_url, nicht cover_image
+        anime_data["cover_url"] = cover_image
         
         # Extract genres
         genres = []
@@ -274,7 +264,8 @@ def save_anime_data_from_html(
         
         # Extrahiere Informationen für jede Staffel
         for season_id in sorted(season_ids):
-            season_data = {"season_id": season_id, "episodes": []}
+            # WICHTIG: AnimeService erwartet "number" nicht "season_id"
+            season_data = {"number": season_id, "title": f"Staffel {season_id}", "episodes": []}
             
             # Extrahiere Episode-Links für diese Staffel
             episode_links = soup.select(f"[data-season-id='{season_id}'] a[data-episode-id]")
@@ -294,8 +285,9 @@ def save_anime_data_from_html(
                 if episode_id in episode_titles:
                     episode_title = episode_titles[episode_id]
                 
+                # WICHTIG: AnimeService erwartet "number" nicht "episode_id"
                 episode_data = {
-                    "episode_id": episode_id,
+                    "number": episode_id,
                     "title": episode_title,
                     "url": f"https://aniworld.to{episode_url}" if episode_url.startswith("/") else episode_url,
                 }
@@ -313,77 +305,40 @@ def save_anime_data_from_html(
 
         if "seasons" not in anime_data or not anime_data["seasons"]:
             module_log.debug(f"Keine Staffeldaten im anime_data Dictionary gefunden!")
-            return None
 
-        # Speichere die Daten in der Datenbank
-        cursor = None
+        # GEÄNDERT: Verwende AnimeService anstelle von direktem SQL
         try:
-            # Erstelle Cursor für Datenbankoperationen
-            cursor = session.cursor(dictionary=True)
+            from aniworld.database.services import AnimeService
+            anime_service = AnimeService()
+            anime_id = anime_service.save_from_scraper_data(anime_data)
             
-            # Prüfe, ob der Anime bereits existiert
-            cursor.execute(
-                "SELECT * FROM anime_series WHERE aniworld_url = %s", 
-                (anime_link,)
-            )
-            existing_anime = cursor.fetchone()
-            
-            anime_id = None
-            
-            if existing_anime:
-                # Anime existiert bereits, aktualisiere ihn
-                anime_id = existing_anime['series_id']
-                module_log.debug(f"Aktualisiere existierenden Anime mit ID: {anime_id}")
-                
-                cursor.execute(
-                    "UPDATE anime_series SET titel = %s, aktualisiert_am = NOW() WHERE series_id = %s",
-                    (anime_data["title"], anime_id)
-                )
-            else:
-                # Neuer Anime, füge ihn hinzu
-                module_log.debug("Erstelle neuen Anime-Eintrag")
-                cursor.execute(
-                    """
-                    INSERT INTO anime_series 
-                    (titel, beschreibung, aniworld_url, cover_url, status) 
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (anime_data["title"], "", anime_link, "", "laufend")
-                )
-                anime_id = cursor.lastrowid
-                
-            # Commit nur wenn wir autocommit=False haben und nichts fehlgeschlagen ist
-            if not session.autocommit:
-                session.commit()
-                
+            # Hole das vollständige Anime-Objekt
+            anime = anime_service.get_anime_by_id(anime_id)
             module_log.info(f"Anime '{anime_data['title']}' in Datenbank gespeichert mit ID: {anime_id}")
             
-            # Erstelle ein AnimeSeries-Objekt für die Rückgabe
-            anime = AnimeSeries()
-            anime.series_id = anime_id
-            anime.titel = anime_data["title"]
-            anime.aniworld_url = anime_link
-            
             return anime
-
         except Exception as e:
-            module_log.error(f"Fehler beim Speichern der Anime-Daten: {e}")
+            module_log.error(f"Fehler beim Speichern über AnimeService: {e}")
             module_log.error(traceback.format_exc())
-            if should_close_session and not session.autocommit:
-                try:
-                    session.rollback()
-                except:
-                    pass
-            return None
-    finally:
-        if should_close_session and session:
+            
+            # Fallback: Versuche minimale Anime-Daten zu speichern
             try:
-                if cursor:
-                    cursor.close()
-                session.close()
-                module_log.debug("Datenbankverbindung geschlossen")
-            except:
-                pass
+                from aniworld.database.integration import DatabaseIntegration
+                db = DatabaseIntegration()
+                anime_id = db.save_minimal_anime(anime_link.split('/')[-1], anime_data["title"])
+                if anime_id:
+                    anime = db.get_anime_by_id(anime_id)
+                    module_log.info(f"Minimale Anime-Daten gespeichert mit ID: {anime_id}")
+                    return anime
+            except Exception as e2:
+                module_log.error(f"Auch Fallback für minimale Speicherung fehlgeschlagen: {e2}")
+            
+            return None
+
+    except Exception as e:
+        module_log.error(f"Fehler bei der Extraktion oder Speicherung der Anime-Daten: {e}")
+        module_log.error(traceback.format_exc())
+        return None
 
 
 def search_by_query(query: str) -> str:

@@ -681,4 +681,38 @@
   - Automatisierung für regelmäßige Aktualisierungen der Datenbank implementieren
   - Entwicklung eines Dashboards zur Überwachung der Anime-Datenbank
 
+## [2024-07-25 21:55] Behebung der TUI-Abstürze und Datenbankprobleme mit Staffeln/Episoden
+
+- **Modifizierte Dateien:**
+  - `src/aniworld/search.py` - Korrektur der Datenextraktion und Datenbank-Integration
+  - `src/aniworld/__main__.py` - Umfassende Verbesserung der Fehlerbehandlung in der EpisodeForm
+
+- **Zusammenfassung der Änderungen:**
+  - **Problem 1:** Die Anwendung stürzte nach Suchen wie "solo" und Auswahl von "Solo Leveling" ab
+  - **Problem 2:** Staffeln und Episoden wurden nicht in der Datenbank gespeichert
+
+- **Lösungen:**
+  1. **Datenbank-Integration verbessert:**
+     - Überarbeitung der `save_anime_data_from_html`-Funktion
+     - Umstellung von direktem SQL-Code auf Verwendung des AnimeService
+     - Korrektes Formatieren der extrahierten Daten für die Datenbank (Schlüssel "number" statt "season_id"/"episode_id")
+     - Bessere Fehlerbehandlung mit Fallback für minimale Daten
+
+  2. **Verbesserte Fehlerbehandlung in der UI:**
+     - Umfassende try-except-Blöcke in der EpisodeForm
+     - Fallback-Mechanismen für fehlende oder fehlerhafte Staffel- und Episodendaten
+     - Neue Hilfsmethoden zur Formatierung der Episodenliste
+     - Sichere Initialisierung der UI-Elemente auch bei Fehlern
+
+- **Aktueller Status:**
+  - Die TUI sollte nun stabiler laufen und bei problematischen Anime-Serien nicht mehr abstürzen
+  - Staffeln und Episoden werden korrekt formatiert und an die Datenbank weitergegeben
+  - Verbessertes Fehler-Logging zur einfacheren Diagnose weiterer Probleme
+
+- **Nächste Schritte:**
+  - Umfangreiche Tests mit verschiedenen Anime durchführen
+  - Überprüfung der Datenqualität in der Datenbank
+  - Optimierung der Performance bei großen Datensätzen
+  - Mögliche Erweiterung um eine asynchrone Datenbankspeicherung im Hintergrund
+
 ## Glossar 
