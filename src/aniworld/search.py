@@ -173,42 +173,92 @@ def save_anime_data_from_html(html_content: str, url: str, slug: str) -> Optiona
             'original_title': meta_data.get('originaltitel')
         }
         
-        # Extrahiere Staffeln und Episoden, wenn vorhanden
-        seasons_container = soup.find('div', class_='seasons-wrapper')
-        if seasons_container:
-            seasons = []
-            for season_elem in seasons_container.find_all('div', class_='season'):
-                season_title_elem = season_elem.find('h3')
-                season_title = season_title_elem.text.strip() if season_title_elem else None
-                season_number_match = re.search(r'Staffel (\d+)', season_title) if season_title else None
-                season_number = int(season_number_match.group(1)) if season_number_match else 0
+        # NEUE METHODE: Extrahiere Staffeln und Episoden
+        # 1. Sammle alle verfügbaren Staffeln über data-season-id Attribute
+        season_elements = soup.find_all(attrs={"data-season-id": True})
+        season_ids = set()
+        
+        for elem in season_elements:
+            season_id = elem.get('data-season-id')
+            if season_id:
+                season_ids.add(season_id)
                 
-                season_data = {
-                    'number': season_number,
-                    'title': season_title,
-                    'episodes': []
-                }
+        print(f"Gefundene Staffel-IDs: {season_ids}")
                 
-                episode_list = season_elem.find('div', class_='episodes')
-                if episode_list:
-                    for episode_elem in episode_list.find_all('a'):
-                        episode_url = episode_elem.get('href')
-                        if episode_url and not episode_url.startswith('http'):
-                            episode_url = f"https://aniworld.to{episode_url}"
-                            
-                        episode_title = episode_elem.text.strip() if episode_elem else None
-                        episode_number_match = re.search(r'Episode (\d+)', episode_title) if episode_title else None
-                        episode_number = int(episode_number_match.group(1)) if episode_number_match else 0
-                        
-                        season_data['episodes'].append({
-                            'number': episode_number,
-                            'title': episode_title,
-                            'url': episode_url
-                        })
-                
-                seasons.append(season_data)
+        # 2. Sammle alle Episoden-Links 
+        episode_elements = soup.find_all(attrs={"data-episode-id": True})
+        
+        # Dictionary für die Zuordnung von Staffeln zu Episoden
+        seasons = []
+        season_dict = {}
+        
+        # Staffeln initialisieren
+        for season_id in season_ids:
+            staffel_match = None
             
-            anime_data['seasons'] = seasons
+            # Suche nach Staffel-Titel
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if f'/staffel-{season_id}' in href and 'episode' not in href:
+                    staffel_match = link
+                    break
+            
+            season_title = f"Staffel {season_id}"
+            if staffel_match and staffel_match.get('title'):
+                season_title = staffel_match.get('title')
+                
+            season_data = {
+                'number': int(season_id),
+                'title': season_title,
+                'episodes': []
+            }
+            
+            season_dict[season_id] = season_data
+            seasons.append(season_data)
+            
+        # Episoden zu Staffeln zuordnen
+        for episode_elem in episode_elements:
+            episode_id = episode_elem.get('data-episode-id')
+            episode_title = episode_elem.get('title', '')
+            episode_url = episode_elem.get('href')
+            
+            # URL vervollständigen, falls notwendig
+            if episode_url and not episode_url.startswith('http'):
+                episode_url = f"https://aniworld.to{episode_url}"
+            
+            # Staffel und Episode aus dem Titel extrahieren
+            # Format erwartet: "Staffel X Episode Y"
+            season_match = re.search(r'Staffel (\d+)', episode_title)
+            episode_match = re.search(r'Episode (\d+)', episode_title)
+            
+            if season_match and episode_match:
+                season_number = season_match.group(1)
+                episode_number = int(episode_match.group(1))
+                
+                # Zu der entsprechenden Staffel hinzufügen
+                if season_number in season_dict:
+                    season_dict[season_number]['episodes'].append({
+                        'number': episode_number,
+                        'title': episode_title,
+                        'url': episode_url
+                    })
+        
+        # Leere Staffeln entfernen
+        seasons = [s for s in seasons if len(s['episodes']) > 0]
+        
+        # Staffeln nach Nummer sortieren
+        seasons.sort(key=lambda x: x['number'])
+        
+        # Für jede Staffel die Episoden nach Nummer sortieren
+        for season in seasons:
+            season['episodes'].sort(key=lambda x: x['number'])
+            
+        print(f"Anzahl Staffeln in den Daten: {len(seasons)}")
+        for season in seasons:
+            print(f"Staffel {season['number']}: {len(season['episodes'])} Episoden")
+            
+        # Staffeln zu den Anime-Daten hinzufügen
+        anime_data['seasons'] = seasons
         
         # Speichere in der Datenbank
         print("Rufe get_pipeline() auf...")

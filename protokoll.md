@@ -248,4 +248,23 @@
   - Implementierung einer asynchronen Datenspeicherung für große Datensätze
   - Entfernen der Debug-Ausgaben nach erfolgreicher Prüfung der Funktionalität
 
+## [2025-03-22 16:45] Korrektur der Staffel- und Episoden-Extraktion aus HTML
+
+- Datei geändert: `src/aniworld/search.py`
+- Problem: Die HTML-Extraktion für Staffeln und Episoden war fehlerhaft, da die Website-Struktur sich geändert hat
+- Die Website verwendet nicht mehr `seasons-wrapper` Container, sondern eine andere DOM-Struktur
+- Lösung: Implementierung einer neuen Extraktionslogik, die mit `data-season-id` und `data-episode-id` Attributen arbeitet
+- Gründliche Analyse der HTML-Struktur durchgeführt und Parser entsprechend angepasst
+- Staffel- und Episodenlisten werden nun korrekt extrahiert, sortiert und in der Datenbank gespeichert
+
+- Aktueller Status: 
+  - Die Extraktion der Staffel- und Episodendaten funktioniert jetzt korrekt
+  - Die Daten werden in der Datenbank gespeichert
+  - Sowohl SQL-Tabellenname-Problem als auch HTML-Parsing-Problem wurden gelöst
+
+- Nächste Schritte:
+  - Testen der Anwendung mit verschiedenen Anime-Seiten
+  - Optimierung der Performance bei großen Serien mit vielen Staffeln/Episoden
+  - Überprüfung aller Datenbank-Funktionen mit den gesammelten Daten
+
 ## Glossar 
