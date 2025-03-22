@@ -432,7 +432,7 @@ class EpisodeRepository(BaseRepository):
         if episode.episode_id is None or episode.episode_id <= 0:
             # Neue Episode - Insert
             query = """
-                INSERT INTO episoden 
+                INSERT INTO episodes 
                 (season_id, episode_nummer, titel, beschreibung, laufzeit, luftdatum, aniworld_url)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
@@ -451,7 +451,7 @@ class EpisodeRepository(BaseRepository):
         else:
             # Bestehende Episode - Update
             query = """
-                UPDATE episoden 
+                UPDATE episodes 
                 SET season_id = %s, 
                     episode_nummer = %s, 
                     titel = %s, 
@@ -490,7 +490,7 @@ class EpisodeRepository(BaseRepository):
         query = """
             SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
                    laufzeit, luftdatum, aniworld_url
-            FROM episoden
+            FROM episodes
             WHERE episode_id = %s
         """
         
@@ -522,7 +522,7 @@ class EpisodeRepository(BaseRepository):
         query = """
             SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
                    laufzeit, luftdatum, aniworld_url
-            FROM episoden
+            FROM episodes
             WHERE aniworld_url = %s
         """
         
@@ -554,7 +554,7 @@ class EpisodeRepository(BaseRepository):
         query = """
             SELECT episode_id, season_id, episode_nummer, titel, beschreibung, 
                    laufzeit, luftdatum, aniworld_url
-            FROM episoden
+            FROM episodes
             WHERE season_id = %s
             ORDER BY episode_nummer
         """
@@ -586,7 +586,7 @@ class EpisodeRepository(BaseRepository):
         Returns:
             True, wenn erfolgreich gelöscht
         """
-        query = "DELETE FROM episoden WHERE episode_id = %s"
+        query = "DELETE FROM episodes WHERE episode_id = %s"
         return self._execute_update(query, (episode_id,)) > 0
 
 

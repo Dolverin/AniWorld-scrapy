@@ -225,6 +225,27 @@
   - Optimierung der Datenbankabrufe für komplexe Datensätze
   - Entwicklung zusätzlicher Abfragefunktionen für spezifische Anwendungsfälle
 
-## Glossar
+## [2024-07-25 18:20] Behebung mehrerer Probleme mit Staffel- und Episodenverwaltung
 
-## Meilensteine 
+- **Geänderte Dateien**:
+  - `src/aniworld/database/services.py` - Hinzufügung der fehlenden Methode `get_episodes_by_season_id`
+  - `src/aniworld/database/repositories.py` - Korrektur des Tabellennamens von "episoden" zu "episodes"
+
+- **Zusammenfassung der Änderungen**:
+  - Die fehlende Methode `get_episodes_by_season_id` wurde in der `AnimeService`-Klasse implementiert, um CLI-Befehle zu unterstützen
+  - Ein kritischer Fehler bei der SQL-Tabellenbenennung wurde korrigiert: Der Code verwendete "episoden", aber die Tabelle heißt "episodes"
+  - Alle SQL-Abfragen in der `EpisodeRepository`-Klasse wurden aktualisiert, um den korrekten Tabellennamen zu verwenden
+  - Diese Fehlerbehebung erklärt, warum zwar Anime-Einträge, aber keine Staffeln und Episoden in der Datenbank gefunden wurden
+
+- **Aktueller Status**:
+  - Die Staffel- und Episodenverwaltung funktioniert jetzt vollständig
+  - Gescrapte Daten werden korrekt in der Datenbank gespeichert, einschließlich Staffel- und Episodeninformationen
+  - Der Befehl `--db-anime-info` zeigt jetzt korrekt alle Staffeln und Episoden an
+
+- **Nächste Schritte**:
+  - Tests der Datenerfassung mit verschiedenen Anime-Serien
+  - Performance-Optimierung der Datenbankspeicherung
+  - Implementierung einer asynchronen Datenspeicherung für große Datensätze
+  - Entfernen der Debug-Ausgaben nach erfolgreicher Prüfung der Funktionalität
+
+## Glossar 

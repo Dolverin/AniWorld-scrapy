@@ -159,6 +159,18 @@ class AnimeService:
         """
         return self.season_repo.find_by_anime_id(series_id)
     
+    def get_episodes_by_season_id(self, season_id: int) -> List[Episode]:
+        """
+        Gibt alle Episoden einer Staffel zurück.
+        
+        Args:
+            season_id: ID der Staffel
+            
+        Returns:
+            Liste der Episoden
+        """
+        return self.episode_repo.find_by_season_id(season_id)
+    
     def get_anime_by_url(self, url: str) -> Optional[AnimeSeries]:
         """
         Findet einen Anime anhand seiner Aniworld-URL.
