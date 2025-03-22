@@ -252,24 +252,35 @@ def save_anime_data_from_html(
             if season_id and season_id.isdigit():
                 season_ids.add(int(season_id))
         
-        module_log.debug(f"Gefundene Staffel-IDs: {season_ids}")
+        module_log.debug(f"Gefundene Staffel-IDs mit data-season-id: {season_ids}")
         
-        # Wenn keine Staffel-IDs gefunden wurden, versuche alternative Methode
-        if not season_ids:
-            # Versuche Staffeln aus den Episoden-URLs zu extrahieren
-            episode_links = soup.select("a[href*='/staffel-']")
-            for link in episode_links:
-                href = link.get("href", "")
+        # Erweiterte Staffelerkennung: Suche nach allen Links, die auf Staffeln verweisen
+        all_season_links = soup.select("a[href*='/staffel-']")
+        for link in all_season_links:
+            href = link.get("href", "")
+            # Ausschließen von Episode-Links, wir wollen nur die Staffel-Links
+            if '/episode-' not in href:
                 match = re.search(r'/staffel-(\d+)', href)
                 if match:
-                    season_ids.add(int(match.group(1)))
-            
-            module_log.debug(f"Staffel-IDs aus URLs extrahiert: {season_ids}")
-            
-            # Wenn immer noch keine Staffeln gefunden wurden, erstelle eine Standardstaffel
-            if not season_ids:
-                season_ids = {1}  # Standardmäßig Staffel 1
-                module_log.debug("Keine Staffeln gefunden, verwende Standardstaffel 1")
+                    season_id = int(match.group(1))
+                    season_ids.add(season_id)
+                    module_log.debug(f"Staffel {season_id} aus Link {href} extrahiert")
+        
+        # Auch nach Textmustern in den Überschriften und Containern suchen
+        for heading in soup.select("h2, h3, div.seasonHeader, div.seasonSelection"):
+            text = heading.text.strip()
+            match = re.search(r'Staffel\s+(\d+)', text, re.IGNORECASE)
+            if match:
+                season_id = int(match.group(1))
+                season_ids.add(season_id)
+                module_log.debug(f"Staffel {season_id} aus Text '{text}' extrahiert")
+        
+        module_log.debug(f"Alle gefundenen Staffel-IDs: {season_ids}")
+        
+        # Wenn immer noch keine Staffeln gefunden wurden, erstelle eine Standardstaffel
+        if not season_ids:
+            season_ids = {1}  # Standardmäßig Staffel 1
+            module_log.debug("Keine Staffeln gefunden, verwende Standardstaffel 1")
         
         # Extrahiere Episodentitel aus der Tabelle
         episode_titles = {}
@@ -315,6 +326,32 @@ def save_anime_data_from_html(
                     href = link.get("href", "")
                     if f"/staffel-{season_id}/" in href:
                         episode_links.append(link)
+            
+            # Erweiterte Episodenerkennung für Staffel
+            if not episode_links or len(episode_links) == 0:
+                module_log.debug(f"Immer noch keine Episoden-Links für Staffel {season_id} gefunden. Versuche weitere Methoden.")
+                
+                # Methode 1: Suche nach Episoden-Tabellen für diese Staffel
+                for table in soup.select("table.seasonEpisodesTable, div.episodes-table"):
+                    # Überprüfe, ob die Tabelle zur aktuellen Staffel gehört
+                    table_parent = table.parent
+                    parent_text = table_parent.text if table_parent else ""
+                    if f"Staffel {season_id}" in parent_text or f"Season {season_id}" in parent_text:
+                        # Extrahiere Episode-Links aus der Tabelle
+                        for link in table.select("a[href*='/episode-']"):
+                            if link not in episode_links:
+                                episode_links.append(link)
+                                module_log.debug(f"Episode-Link für Staffel {season_id} in Tabelle gefunden: {link.get('href', '')}")
+                
+                # Methode 2: Suche nach allen Episode-Links und überprüfe, ob sie zur aktuellen Staffel gehören
+                for link in soup.select("a[href*='/episode-']"):
+                    href = link.get("href", "")
+                    # Überprüfe, ob der Link zur aktuellen Staffel gehört
+                    staffel_match = re.search(r'/staffel-(\d+)/episode-', href)
+                    if staffel_match and int(staffel_match.group(1)) == season_id:
+                        if link not in episode_links:
+                            episode_links.append(link)
+                            module_log.debug(f"Episode-Link für Staffel {season_id} gefunden: {href}")
             
             module_log.debug(f"Anzahl Episoden-Links für Staffel {season_id}: {len(episode_links)}")
             
@@ -376,6 +413,16 @@ def save_anime_data_from_html(
 
         anime_data["seasons"] = seasons
         module_log.debug(f"Anzahl Staffeln in den Daten: {len(seasons)}")
+        
+        # Detaillierte Debug-Ausgabe zu den gefundenen Staffeln
+        for idx, season in enumerate(seasons):
+            module_log.debug(f"Staffel {idx+1}: Nummer={season.get('number')}, Titel={season.get('title')}, Episoden={len(season.get('episodes', []))}")
+            # Zeige die ersten 3 Episoden als Beispiel
+            for ep_idx, episode in enumerate(season.get('episodes', [])[:3]):
+                module_log.debug(f"  - Episode {ep_idx+1}: Nummer={episode.get('number')}, Titel={episode.get('title')}")
+            
+            if len(season.get('episodes', [])) > 3:
+                module_log.debug(f"  - ... und {len(season.get('episodes', [])) - 3} weitere Episoden")
 
         # Im Anime Link keine trailing slashes für die Datenbank
         if anime_link.endswith("/"):

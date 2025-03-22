@@ -707,4 +707,44 @@
   - Monitoring der Logs, um festzustellen, ob die HTML-Extraktion zuverlässig funktioniert
   - Verbesserte Datenvalidierung für unvollständige Daten
 
+## [2024-07-26 10:45] Verbesserung der Staffel- und Episodenerkennung
+
+- **Geänderte Dateien:**
+  - `src/aniworld/search.py` - Verbesserte Extraktion von Staffeln und Episoden
+
+- **Identifiziertes Problem:**
+  - Bei Anime-Serien werden nur Informationen der ersten Staffel erkannt und in die Datenbank geschrieben
+  - Die Erkennung von Staffeln über `data-season-id`-Attribute ist unzuverlässig
+  - Die Episodenerkennung für Staffeln jenseits der ersten Staffel funktioniert nicht korrekt
+
+- **Implementierte Lösungen:**
+  1. **Verbesserte Staffelerkennung:**
+     - Erweiterung der Staffelerkennung, um alle verfügbaren Staffeln zu finden, nicht nur über `data-season-id`
+     - Zusätzliche Suche nach Links, die spezifisch auf Staffeln verweisen (`href*='/staffel-'`)
+     - Extraktion von Staffelnummern aus Überschriften und Containern mit Textmustern wie "Staffel X"
+     - Umfassendere Protokollierung aller gefundenen Staffel-IDs
+
+  2. **Verbesserte Episodenerkennung:**
+     - Mehrstufige Episodenerkennung für jede Staffel
+     - Suche nach Episoden in Episoden-Tabellen, die zur jeweiligen Staffel gehören
+     - Analyse von Tabellen-Elternknoten, um die Zugehörigkeit zu einer bestimmten Staffel festzustellen
+     - Zusätzliche direkte Suche nach Episodenlinks mit Staffelpfaden
+
+  3. **Detaillierte Debug-Ausgaben:**
+     - Protokollierung aller gefundenen Staffeln und deren Episoden
+     - Informationen zu Staffelnummern, Titeln und Episodenanzahl
+     - Beispielhafte Ausgabe der ersten Episoden jeder Staffel
+
+- **Aktueller Status:**
+  - Alle verfügbaren Staffeln eines Anime werden erkannt und in die Datenbank geschrieben
+  - Episoden werden korrekt ihren jeweiligen Staffeln zugeordnet
+  - Verbesserte Robustheit bei unterschiedlichen HTML-Strukturen
+  - Umfassende Protokollierung zur Diagnose und Verifizierung
+
+- **Nächste Schritte:**
+  - Testen mit verschiedenen Anime-Serien, die mehrere Staffeln haben
+  - Optimierung der Performance bei umfangreichen Serien
+  - Weiteres Monitoring der Logs, um etwaige Probleme zu identifizieren
+  - Verbesserung der Datenqualität für unvollständige oder fehlerhafte Informationen
+
 ## Glossar 
