@@ -445,21 +445,66 @@ def search_by_query(query: str) -> str:
         return selected_slug
 
 
-def fetch_anime_json(url: str):
-    try:
-        if os.getenv("USE_PLAYWRIGHT"):
-            page_content = html.unescape(fetch_url_content(url).decode('utf-8'))
-            soup = BeautifulSoup(page_content, 'html.parser')
-            json_data = soup.find('pre').text
-        else:
-            json_data = html.unescape(fetch_url_content(url).decode('utf-8'))
+def fetch_anime_json(url: str) -> Optional[List[Dict]]:
+    """Abrufen der JSON-Daten für die Suche"""
+    print(f"\nSende Suchanfrage an: {url}")
+    logging.debug(f"Fetching anime JSON data from: {url}")
+    
+    response = fetch_url_content(url)
+    if not response:
+        print("Keine Antwort von der Suchanfrage erhalten!")
+        logging.error("Failed to fetch search results")
+        return None
 
-        decoded_data = loads(json_data)
-        if isinstance(decoded_data, list) and decoded_data:
+    try:
+        # Versuche die JSON-Daten zu dekodieren
+        response_text = response.decode('utf-8')
+        
+        # Überprüfe auf mögliche HTML-Antwort (z.B. bei Captcha)
+        if "<html" in response_text or "<body" in response_text:
+            soup = BeautifulSoup(response_text, 'html.parser')
+            # Suche nach pre-Tag, das normalerweise JSON-Daten enthält
+            json_tag = soup.find('pre')
+            if json_tag:
+                response_text = json_tag.text
+            else:
+                print("Die Antwort enthält HTML statt JSON. Möglicherweise wurde ein Captcha gelöst.")
+                # Suche nach einem JSON-ähnlichen Teil in der Antwort
+                json_match = re.search(r'\[\s*\{.*\}\s*\]', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(0)
+                else:
+                    print("Konnte keine JSON-Daten in der HTML-Antwort finden.")
+                    logging.error("No JSON data found in HTML response")
+                    return None
+        
+        # Log erste 200 Zeichen der Antwort
+        logging.debug(f"Response first 200 chars: {response_text[:200]}")
+        print(f"Antwort erhalten, verarbeite Daten...")
+        
+        # Versuche die JSON-Daten zu parsen
+        decoded_data = loads(response_text)
+        
+        if isinstance(decoded_data, list):
+            logging.debug(f"Parsed JSON data: Found {len(decoded_data)} items")
+            print(f"Gefunden: {len(decoded_data)} Anime-Einträge")
             return decoded_data
-    except (AttributeError, JSONDecodeError):
-        logging.debug("Error fetching or decoding the anime data.")
-    return None
+        else:
+            print(f"Unerwartetes Antwortformat: {type(decoded_data)}")
+            logging.error(f"Unexpected response format: {type(decoded_data)}")
+            return None
+            
+    except JSONDecodeError as e:
+        print(f"Fehler beim Dekodieren der JSON-Antwort: {str(e)}")
+        logging.error(f"JSON decode error: {str(e)}")
+        # Zeige die ersten 200 Zeichen der Antwort an
+        if response:
+            print(f"Antwort (erste 200 Zeichen): {response.decode('utf-8', errors='replace')[:200]}...")
+        return None
+    except Exception as e:
+        print(f"Unerwarteter Fehler bei der Verarbeitung der Suchantwort: {str(e)}")
+        logging.error(f"Unexpected error processing search response: {str(e)}")
+        return None
 
 
 def display_menu(stdscr: curses.window, items: List[Dict[str, Optional[str]]]) -> Optional[str]:

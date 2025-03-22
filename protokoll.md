@@ -408,4 +408,31 @@
   - Überwachung der Performance, da Playwright langsamer sein kann als direkte HTTP-Anfragen
   - Implementierung von Fallback-Mechanismen für den Fall, dass Playwright nicht verfügbar ist
 
+## [2025-03-22 17:52] Behebung des Captcha-Problems bei der Suche
+
+- Dateien geändert: 
+  - `src/aniworld/common/common.py`
+  - `src/aniworld/search.py`
+
+- Problem:
+  - Bei Suchanfragen wie "solo" erscheint ein Captcha, das nicht automatisch gelöst werden kann
+  - Fehlermeldung: `Request to https://aniworld.to/ajax/seriesSearch?keyword=solo failed: Captcha not solved within the time limit`
+  - Die Website blockiert automatisierte Zugriffe mit einem Captcha zur Sicherheit
+  
+- Lösung:
+  - Playwright wird nun für Suchanfragen im nicht-headless Modus gestartet (sichtbarer Browser)
+  - Der Benutzer kann das Captcha manuell lösen, wenn es erscheint
+  - Verbesserung der JSON-Parsing-Logik für robustere Verarbeitung verschiedener Antwortformate
+  - Ausführlichere Debug-Ausgaben zur besseren Fehlerdiagnose
+
+- Aktueller Status:
+  - Die Suchfunktion funktioniert jetzt auch bei erstmaligen Suchanfragen oder Blockierungen
+  - Beim Erscheinen eines Captchas wird ein Browserfenster geöffnet, in dem der Benutzer es lösen kann
+  - Nach der Lösung des Captchas kann die Suche normal fortgesetzt werden
+
+- Nächste Schritte:
+  - Langfristige Implementierung eines Cookie-Systems zur Speicherung erfolgreicher Captcha-Lösungen
+  - Untersuchung alternativer Suchmethoden ohne AJAX-Anfragen
+  - Optimierung des Captcha-Erkennungsmechanismus
+
 ## Glossar 

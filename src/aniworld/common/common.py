@@ -146,50 +146,33 @@ def fetch_url_content_with_playwright(
 
     with sync_playwright() as p:
         options = {'proxy': {'server': proxy}} if proxy else {}
-        headless = os.getenv("HEADLESS", not aniworld_globals.IS_DEBUG_MODE)
+        # Ändere auf non-headless Modus für Captcha bei Suchfunktionen
+        headless = False if "seriesSearch" in url else os.getenv("HEADLESS", not aniworld_globals.IS_DEBUG_MODE)
         browser = p.chromium.launch(headless=headless)
 
-        context = browser.new_context(**options)
-        page = context.new_page()
-        page.set_extra_http_headers(headers)
-
         try:
-            response = page.goto(url, timeout=10000)
-            content = page.content()
-            logging.debug(content)
+            page = browser.new_page(**options)
+            page.set_extra_http_headers(headers)
 
-            if page.locator(
-                "h1#ddg-l10n-title:has-text('Checking your browser before accessing')"
-            ).count() > 0:
-                logging.debug("Captcha detected, attempting to solve.")
+            try:
+                logging.debug("Fetching URL with Playwright: %s", url)
+                page.goto(url, timeout=60000)  # 60 Sekunden Timeout
 
-                for attempt in range(120):
-                    page.wait_for_timeout(1000)
-                    if page.locator(
-                        "h1#ddg-l10n-title:has-text('Checking your browser before accessing')"
-                    ).count() == 0:
-                        logging.debug("Captcha solved.")
-                        break
-                    logging.debug("Captcha still present, retry %s/120", attempt + 1)
+                # Bei Suchanfragen mehr Zeit für manuelle Captcha-Lösung
+                if "seriesSearch" in url:
+                    logging.info("Suchfunktion aktiv - Falls ein Captcha erscheint, bitte lösen Sie es im Browser!")
+                    print("\nACHTUNG: Ein Browser wurde geöffnet. Falls ein Captcha erscheint, bitte lösen Sie es dort!")
+                    print("Nach der Lösung des Captchas wird die Suche automatisch fortgesetzt.\n")
+                    # Warte länger bei Suche für manuelle Interaktion
+                    page.wait_for_load_state("networkidle", timeout=120000)  # 2 Minuten für manuelles Lösen
 
-                if page.locator(
-                    "h1#ddg-l10n-title:has-text('Checking your browser before accessing')"
-                ).count() > 0:
-                    raise TimeoutError("Captcha not solved within the time limit.")
-
-            if response.status != 200:
-                raise HTTPError(f"Failed to fetch page: {response.status}")
-
-            page.wait_for_timeout(3000)
-            return page.content()
-
-        except (TimeoutError, HTTPError) as error:
-            if check:
-                logging.critical("Request to %s failed: %s", url, error)
-                sys.exit(1)
-            return None
+                content = page.content()
+                return content.encode("utf-8")
+            except Exception as e:
+                if check:
+                    logging.critical("Request to %s failed with Playwright: %s", url, e)
+                return None
         finally:
-            context.close()
             browser.close()
 
 
@@ -1660,7 +1643,7 @@ def install_and_import(package):
         while True:
             print(f'The Package "{package}" is not installed!')
             user_input = input(
-                f'Do you want me to run “pip install {package}” for you?  (Y|N) '
+                f'Do you want me to run "pip install {package}" for you?  (Y|N) '
             ).upper()
             if user_input == "Y":
                 print(f"{package} is installing...")
